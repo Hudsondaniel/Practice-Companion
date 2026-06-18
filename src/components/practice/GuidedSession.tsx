@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   CheckCircle2,
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { AutomaticityChecklist, ClarityRating } from '@/components/practice/PhaseExtras'
-import { ExpandableSteps } from '@/components/practice/ExpandableSteps'
+import { TimedStepRunner } from '@/components/practice/TimedStepRunner'
 import { PhaseSidebar } from '@/components/practice/PhaseSidebar'
 import { ResizablePanel } from '@/components/practice/ResizablePanel'
 import { DailyTranscriptionCapture } from '@/components/transcription/DailyTranscriptionCapture'
@@ -35,6 +35,7 @@ import { useSessionToolsStore } from '@/stores/session-tools-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { useUIStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
+import { useVocabularyStore } from '@/stores/vocabulary-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { currentMonthYear, type PracticeBlockId } from '@/types/practice-method'
 
@@ -53,16 +54,12 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     resetPhaseTimer,
     completeCurrentPhase,
     goToPhase,
-    endSession,
     pauseSession,
-    setLastPeakBpm,
-    lastPeakBpm,
+    finishDaySession,
     getSecondsRemaining,
-    toggleStepComplete,
-    getCompletedStepsForPhase,
   } = useGuidedSessionStore()
 
-  const { completeBlock, setCurrentBlock, monthlyPlan, activeConcept } = usePracticeStore()
+  const { completeBlock, setCurrentBlock, monthlyPlan } = usePracticeStore()
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const selectedSegmentId = useTranscriptionStore((s) => s.selectedSegmentId)
   const setSelectedSegment = useTranscriptionStore((s) => s.setSelectedSegment)
@@ -71,7 +68,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const getProject = useTranscriptionStore((s) => s.getProject)
 
   const today = new Date().toISOString().split('T')[0]!
-  const { resetSession, setLastSessionDuration } = useSessionToolsStore()
+  const { resetSession } = useSessionToolsStore()
   const logPhaseCompletion = useAdherenceStore((s) => s.logPhaseCompletion)
   const logSkippedPhases = useAdherenceStore((s) => s.logSkippedPhases)
   const finishSession = useAdherenceStore((s) => s.finishSession)
@@ -91,7 +88,6 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
 
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [checkpointAnswer, setCheckpointAnswer] = useState('')
-  const [peakBpmInput, setPeakBpmInput] = useState('')
   const [clarityRating, setClarityRating] = useState<number | null>(null)
   const [automaticityChecked, setAutomaticityChecked] = useState<Record<string, boolean>>({})
   const [, setTick] = useState(0)
@@ -102,6 +98,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const progress = totalPhases > 0 ? ((phaseIndex + 1) / totalPhases) * 100 : 0
 
   const phaseDuration = (phase?.durationMinutes ?? 0) * 60
+  const phaseElapsed = Math.max(0, phaseDuration - secondsRemaining)
   const phaseProgress =
     phaseDuration > 0 ? ((phaseDuration - secondsRemaining) / phaseDuration) * 100 : 0
 
@@ -113,11 +110,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     markPhaseStarted()
   }, [phaseIndex, markPhaseStarted])
 
-  const dailyHeroProject = transcriptionProjects.find(
-    (p) =>
-      p.practiceDate === today &&
-      (!p.linkedConceptId || p.linkedConceptId === activeConcept?.id),
-  )
+  const dailyHeroProject = transcriptionProjects.find((p) => p.practiceDate === today)
 
   const linkedTranscriptionProject =
     (phase?.blockId === 'transcription-integration' && dailyHeroProject
@@ -131,7 +124,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
       : undefined) ??
     transcriptionProjects.find((p) => p.monthYear === currentMonthYear() && !p.practiceDate)
 
-  const showDailyCapture = phase?.id === 'hero-connect' && !dailyHeroProject && Boolean(activeConcept)
+  const showDailyCapture = phase?.id === 'lang-capture' && !dailyHeroProject
   const showTranscriptionPanel =
     Boolean(linkedTranscriptionProject) &&
     (Boolean(phase?.transcriptionStage) || phase?.blockId === 'transcription-integration')
@@ -169,9 +162,17 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
 
+  const phaseCompleteNotified = useRef(false)
+
   useEffect(() => {
     if (secondsRemaining === 0 && phase && !isPaused) {
-      toast('Phase time complete. Ready for next step.', { icon: '⏱️' })
+      if (!phaseCompleteNotified.current) {
+        phaseCompleteNotified.current = true
+        void import('@/lib/session-sounds').then((m) => m.playPhaseCompleteSound())
+        toast('Phase time complete. Ready for next step.', { icon: '⏱️' })
+      }
+    } else {
+      phaseCompleteNotified.current = false
     }
   }, [secondsRemaining, phase, isPaused])
 
@@ -257,9 +258,28 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     setAutomaticityChecked({})
   }, [phase?.id])
 
+  const handleFinishDay = () => {
+    if (
+      !window.confirm(
+        'End session for today? You will not be able to resume until tomorrow. Progress so far will be saved.',
+      )
+    ) {
+      return
+    }
+    if (phase && !phase.isRecovery) {
+      logCurrentPhase()
+    }
+    finishSession()
+    finishDaySession()
+    recordPracticeDay()
+    toast.success('Session complete for today. Fresh start tomorrow.')
+    resetSession()
+    onComplete()
+  }
+
   const handleCompletePhase = () => {
-    if (phase?.id === 'agility-daily' && peakBpmInput) {
-      setLastPeakBpm(Number(peakBpmInput))
+    if (phase?.id === 'vocabulary-lab' && clarityRating != null) {
+      useVocabularyStore.getState().setLastMotifClarityRating(clarityRating)
     }
 
     if (phase && !phase.isRecovery) {
@@ -270,24 +290,22 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
 
     const hasNext = completeCurrentPhase()
     setCheckpointAnswer('')
-    setPeakBpmInput('')
+    setClarityRating(null)
 
     if (!hasNext) {
       finishSession()
-      const totalSeconds = useGuidedSessionStore.getState().getDailyElapsedSeconds()
-      setLastSessionDuration(totalSeconds)
+      finishDaySession()
       recordPracticeDay()
-      toast.success('Session complete. Outstanding work.')
+      toast.success('Session complete for today. Outstanding work.')
       resetSession()
-      endSession()
       onComplete()
     }
   }
 
   const handleExit = () => {
-    if (window.confirm('Pause session? You can resume later today from Today\'s Practice.')) {
+    if (window.confirm('Pause for later today? You can resume from Today\'s Practice.')) {
       pauseSession()
-      toast('Session paused. Pick up where you left off anytime today.', { icon: '⏸️' })
+      toast('Session paused. Resume anytime today — or use Done for today when finished.', { icon: '⏸️' })
       onComplete()
     }
   }
@@ -393,10 +411,8 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
                     {phase.engagementPrompt}
                   </p>
                 )}
-                {showDailyCapture && activeConcept && (
+                {showDailyCapture && (
                   <DailyTranscriptionCapture
-                    conceptLabel={activeConcept.label}
-                    conceptId={activeConcept.id}
                     practiceDate={today}
                     onSaved={(projectId) => {
                       setActiveProject(projectId)
@@ -419,10 +435,11 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
                     }
                   />
                 )}
-                <ExpandableSteps
+                <TimedStepRunner
                   steps={phase.steps}
-                  completedIndices={getCompletedStepsForPhase(phase.id)}
-                  onToggleComplete={(i) => toggleStepComplete(phase.id, i)}
+                  phaseDurationSeconds={phaseDuration}
+                  elapsedSeconds={phaseElapsed}
+                  isPaused={isPaused}
                 />
               </div>
 
@@ -463,24 +480,6 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
                 </div>
               )}
 
-              {phase.id === 'agility-daily' && (
-                <div className="mb-6">
-                  <label className="mb-2 block text-sm font-medium">
-                    Peak clean BPM
-                    {lastPeakBpm && (
-                      <span className="ml-2 text-muted-foreground">(last session: {lastPeakBpm})</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    value={peakBpmInput}
-                    onChange={(e) => setPeakBpmInput(e.target.value)}
-                    placeholder="e.g. 132"
-                    className="w-32 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  />
-                </div>
-              )}
-
               {startedAt && (
                 <p className="text-xs text-muted-foreground">
                   Session started {new Date(startedAt).toLocaleTimeString()}
@@ -511,15 +510,18 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
         </ResizablePanel>
       </div>
 
-      <footer className="flex shrink-0 items-center justify-between border-t border-border px-4 py-4 md:px-6">
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-4 md:px-6">
         <Button variant="outline" onClick={() => handleNavigatePhase(phaseIndex - 1)} disabled={phaseIndex === 0}>
           <ChevronLeft className="h-4 w-4" />
           Previous
         </Button>
 
-        <div className="flex gap-2 xl:hidden">
-          <Button variant="outline" size="sm" onClick={togglePause}>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="outline" size="sm" onClick={togglePause} className="xl:hidden">
             {isPaused ? 'Resume' : 'Pause'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleFinishDay}>
+            Done for today
           </Button>
         </div>
 
@@ -527,7 +529,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
           {phaseIndex >= totalPhases - 1 ? (
             <>
               <CheckCircle2 className="h-4 w-4" />
-              Finish Session
+              Done for today
             </>
           ) : (
             <>

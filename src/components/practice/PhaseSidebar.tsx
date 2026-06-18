@@ -1,4 +1,5 @@
 import type { GuidedPhase } from '@/types/practice-method'
+import { SESSION_ZONES } from '@/types/practice-method'
 import { CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -13,15 +14,23 @@ interface PhaseGroup {
   items: { phase: GuidedPhase; index: number }[]
 }
 
+function zoneLabel(phase: GuidedPhase): string {
+  if (phase.sessionZone) {
+    return SESSION_ZONES.find((z) => z.id === phase.sessionZone)?.name ?? phase.blockName
+  }
+  return phase.blockName
+}
+
 function groupPhasesByBlock(phases: GuidedPhase[]): PhaseGroup[] {
   const groups: PhaseGroup[] = []
   for (let i = 0; i < phases.length; i++) {
     const phase = phases[i]!
+    const label = zoneLabel(phase)
     const last = groups[groups.length - 1]
-    if (last && last.blockName === phase.blockName) {
+    if (last && last.blockName === label) {
       last.items.push({ phase, index: i })
     } else {
-      groups.push({ blockName: phase.blockName, items: [{ phase, index: i }] })
+      groups.push({ blockName: label, items: [{ phase, index: i }] })
     }
   }
   return groups

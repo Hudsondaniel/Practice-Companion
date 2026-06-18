@@ -6,6 +6,8 @@ import { normalizeSteps } from '@/lib/normalize-steps'
 interface GuidedSessionState {
   isActive: boolean
   isPausedForDay: boolean
+  /** True when user explicitly finished for the day — no resume until tomorrow */
+  dayCompleted: boolean
   sessionDate: string | null
   phases: GuidedPhase[]
   phaseIndex: number
@@ -24,6 +26,8 @@ interface GuidedSessionState {
   resumeSession: () => void
   pauseSession: () => void
   endSession: () => void
+  finishDaySession: () => void
+  isDayCompleteForToday: () => boolean
   completeCurrentPhase: () => boolean
   goToPhase: (index: number) => void
   getSecondsRemaining: () => number
@@ -75,6 +79,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
     (set, get) => ({
       isActive: false,
       isPausedForDay: false,
+      dayCompleted: false,
       sessionDate: null,
       phases: [],
       phaseIndex: 0,
@@ -101,6 +106,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
         set({
           isActive: true,
           isPausedForDay: false,
+          dayCompleted: false,
           sessionDate: today,
           phases,
           phaseIndex: 0,
@@ -157,6 +163,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
         set({
           isActive: false,
           isPausedForDay: false,
+          dayCompleted: false,
           sessionDate: null,
           phases: [],
           phaseIndex: 0,
@@ -170,14 +177,47 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
         })
       },
 
+      finishDaySession: () => {
+        if (document.fullscreenElement) {
+          void document.exitFullscreen().catch(() => {})
+        }
+        const { accumulatedSeconds, segmentStartedAt, isActive } = get()
+        set({
+          isActive: false,
+          isPausedForDay: false,
+          dayCompleted: true,
+          sessionDate: todayIso(),
+          phases: [],
+          phaseIndex: 0,
+          phaseEndsAt: null,
+          isPaused: false,
+          pausedRemainingSeconds: 0,
+          startedAt: null,
+          accumulatedSeconds:
+            accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0),
+          segmentStartedAt: null,
+          completedStepKeys: [],
+        })
+      },
+
+      isDayCompleteForToday: () => {
+        const { dayCompleted, sessionDate } = get()
+        return dayCompleted && sessionDate === todayIso()
+      },
+
       getDailyElapsedSeconds: () => {
         const { accumulatedSeconds, segmentStartedAt, isActive } = get()
         return accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0)
       },
 
       canResumeToday: () => {
-        const { isPausedForDay, sessionDate, phases } = get()
-        return isPausedForDay && sessionDate === todayIso() && phases.length > 0
+        const { isPausedForDay, dayCompleted, sessionDate, phases } = get()
+        return (
+          isPausedForDay &&
+          !dayCompleted &&
+          sessionDate === todayIso() &&
+          phases.length > 0
+        )
       },
 
       completeCurrentPhase: () => {
@@ -264,6 +304,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
       partialize: (s) => ({
         isActive: s.isActive,
         isPausedForDay: s.isPausedForDay,
+        dayCompleted: s.dayCompleted,
         sessionDate: s.sessionDate,
         phases: s.phases,
         phaseIndex: s.phaseIndex,
@@ -290,6 +331,11 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
         }
         if (state.sessionDate && state.sessionDate !== todayIso()) {
           state.endSession()
+          state.dayCompleted = false
+        }
+        if (state.dayCompleted == null) state.dayCompleted = false
+        if (state.dayCompleted && state.sessionDate !== todayIso()) {
+          state.dayCompleted = false
         }
       },
     },

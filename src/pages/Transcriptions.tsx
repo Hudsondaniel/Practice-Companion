@@ -418,7 +418,7 @@ function SegmentRow({
             }
             className="accent-primary"
           />
-          Link to active concept ({activeConcept.label}) for Transcription Integration phases
+          Link to active concept (optional) — Language Acquisition works with any recording
         </label>
       )}
       <div className="mt-2">

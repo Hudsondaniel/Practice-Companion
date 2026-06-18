@@ -1,9 +1,15 @@
+import { useState } from 'react'
 import { Moon, Sun, Monitor } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { isSupabaseConfigured } from '@/lib/supabase'
+import {
+  checkSupabaseConnection,
+  isSupabaseConfigured,
+  supabaseProjectUrl,
+} from '@/lib/supabase'
 import { useUIStore, type Theme } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
 import { BASE_SESSION_MINUTES } from '@/types/practice-method'
@@ -17,6 +23,18 @@ const THEME_OPTIONS: { id: Theme; label: string; icon: typeof Sun }[] = [
 export function Settings() {
   const theme = useUIStore((s) => s.theme)
   const setTheme = useUIStore((s) => s.setTheme)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+
+  const handleTestConnection = async () => {
+    setTesting(true)
+    setTestResult(null)
+    const result = await checkSupabaseConnection()
+    setTestResult(result.message)
+    setTesting(false)
+    if (result.ok) toast.success('Supabase API reachable')
+    else toast.error(result.message)
+  }
 
   return (
     <div className="space-y-6">
@@ -50,17 +68,41 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle>Supabase</CardTitle>
-          <CardDescription>Authentication and data persistence</CardDescription>
+          <CardDescription>
+            Frontend uses project URL + anon key (.env). Postgres URL is for migrations only.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Status:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm">Env configured:</span>
             <Badge variant={isSupabaseConfigured ? 'success' : 'warning'}>
-              {isSupabaseConfigured ? 'Connected' : 'Local mode (configure .env)'}
+              {isSupabaseConfigured ? 'Yes' : 'Missing anon key'}
             </Badge>
           </div>
-          <Input placeholder="VITE_SUPABASE_URL" disabled={isSupabaseConfigured} />
-          <Input placeholder="VITE_SUPABASE_ANON_KEY" type="password" disabled={isSupabaseConfigured} />
+          {supabaseProjectUrl && (
+            <p className="text-xs text-muted-foreground break-all">
+              Project: <span className="font-mono">{supabaseProjectUrl}</span>
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Add <span className="font-mono">VITE_SUPABASE_ANON_KEY</span> to{' '}
+            <span className="font-mono">.env</span> (from Supabase → Settings → API → anon public),
+            then restart <span className="font-mono">npm run dev</span>. On Vercel, set the same vars
+            and redeploy.
+          </p>
+          <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing}>
+            {testing ? 'Testing…' : 'Test Supabase connection'}
+          </Button>
+          {testResult && (
+            <p className={cn('text-xs', testResult.includes('reachable') ? 'text-success' : 'text-warning')}>
+              {testResult}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground border-t border-border pt-3">
+            Practice data still saves in this browser until cloud sync is implemented. Supabase stores
+            the schema; run <span className="font-mono">supabase/migrations/001_initial_schema.sql</span>{' '}
+            in the SQL Editor once.
+          </p>
         </CardContent>
       </Card>
 
@@ -70,9 +112,9 @@ export function Settings() {
           <CardDescription>AI Practice Engine and recording feedback</CardDescription>
         </CardHeader>
         <CardContent>
-          <Input placeholder="VITE_OPENAI_API_KEY" type="password" />
+          <Input placeholder="VITE_OPENAI_API_KEY" type="password" disabled />
           <p className="mt-2 text-xs text-muted-foreground">
-            Without API key, local fallback coaching logic is used.
+            Set in <span className="font-mono">.env</span>. Without it, local fallback coaching is used.
           </p>
         </CardContent>
       </Card>

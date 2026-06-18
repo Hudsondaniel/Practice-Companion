@@ -12,14 +12,20 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAdherenceStore } from '@/stores/adherence-store'
-import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { usePracticeStore } from '@/stores/practice-store'
+import { useVocabularyStore } from '@/stores/vocabulary-store'
+import { getVocabularyContext } from '@/features/vocabulary-lab/rotation'
 
 export function Analytics() {
   const history = useAdherenceStore((s) => s.history)
   const practiceDays = useStreakStore((s) => s.practiceDays)
-  const { lastPeakBpm } = useGuidedSessionStore()
+  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
+  const { cycleStartDate, curriculumLevel } = useVocabularyStore()
+  const vocabCtx = useMemo(
+    () => getVocabularyContext(cycleStartDate, curriculumLevel),
+    [cycleStartDate, curriculumLevel],
+  )
   const activeConcept = usePracticeStore((s) => s.activeConcept)
 
   const consistency = useMemo(() => {
@@ -64,7 +70,7 @@ export function Analytics() {
       'transcription-integration': 'Transcription',
       'standards-hymns-lab': 'Standards Lab',
       'cold-pressure': 'Cold/Pressure',
-      'agility-fluency-lab': 'Agility',
+      'agility-fluency-lab': 'Vocabulary Lab',
     }
     return [...counts.entries()].map(([id, count]) => ({
       block: labels[id] ?? id,
@@ -72,10 +78,15 @@ export function Analytics() {
     }))
   }, [history])
 
-  const tempoData = useMemo(() => {
-    if (!lastPeakBpm) return []
-    return [{ week: 'Current', peak: lastPeakBpm, target: 140 }]
-  }, [lastPeakBpm])
+  const vocabularyProgress = useMemo(() => {
+    return [
+      {
+        label: `Week ${vocabCtx.macroWeek}`,
+        pillar: vocabCtx.module.pillar,
+        clarity: lastMotifClarity ?? 0,
+      },
+    ]
+  }, [vocabCtx, lastMotifClarity])
 
   return (
     <div className="space-y-6">
@@ -162,14 +173,31 @@ export function Analytics() {
         </Card>
       )}
 
-      {tempoData.length > 0 && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Vocabulary Lab</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-lg font-medium">
+            Week {vocabCtx.macroWeek}/12 · {vocabCtx.module.title}
+          </p>
+          <p className="text-sm text-muted-foreground capitalize">{vocabCtx.module.pillar} focus</p>
+          {lastMotifClarity != null && (
+            <p className="mt-2 text-sm">
+              Last motif clarity: <strong>{lastMotifClarity}/5</strong>
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {vocabularyProgress.length > 0 && lastMotifClarity != null && (
         <Card>
           <CardHeader>
-            <CardTitle>Peak BPM (Agility Lab)</CardTitle>
+            <CardTitle>Motif clarity (latest fusion week)</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-primary">{lastPeakBpm} BPM</p>
-            <p className="text-sm text-muted-foreground">Latest logged from guided session</p>
+            <p className="text-2xl font-bold text-primary">{lastMotifClarity}/5</p>
+            <p className="text-sm text-muted-foreground">From Vocabulary Lab fusion week rating</p>
           </CardContent>
         </Card>
       )}

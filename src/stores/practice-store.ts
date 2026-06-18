@@ -47,6 +47,8 @@ interface PracticeState {
   setBacklogTier: (id: string, tier: DeviceBacklogItem['tier']) => void
   setMonthlyTunes: (tunes: MonthlyTune[]) => void
   initTodaySession: (dayType: DayType) => void
+  /** Reset block progress when the calendar day changes (or create if missing) */
+  ensureTodaySession: (dayType?: DayType) => void
   completeBlock: (blockId: PracticeBlockId, actualMinutes: number, notes?: string) => void
   setCurrentBlock: (blockId: PracticeBlockId | null) => void
   setDailyLog: (stage: ConceptStage, tomorrowFocus: string) => void
@@ -155,6 +157,24 @@ function getDayTypeFromDate(): DayType {
   if (day === 0) return 'review'
   if (day <= 3) return 'identity'
   return 'expansion'
+}
+
+function todayIso(): string {
+  return new Date().toISOString().split('T')[0]!
+}
+
+function createTodaySession(dayType: DayType, activeConceptId: string): DailyPracticeSession {
+  const blocks = buildSessionBlocks(dayType)
+  const totalMinutes = blocks.reduce((sum, b) => sum + b.plannedMinutes, 0)
+  return {
+    id: crypto.randomUUID(),
+    date: todayIso(),
+    dayType,
+    totalMinutes,
+    blocks,
+    activeConceptId,
+    completed: false,
+  }
 }
 
 export const usePracticeStore = create<PracticeState>()(
@@ -440,17 +460,20 @@ export const usePracticeStore = create<PracticeState>()(
 
       initTodaySession: (dayType) => {
         const blocks = buildSessionBlocks(dayType)
-        const totalMinutes = blocks.reduce((sum, b) => sum + b.plannedMinutes, 0)
         set({
-          todaySession: {
-            id: crypto.randomUUID(),
-            date: new Date().toISOString().split('T')[0]!,
-            dayType,
-            totalMinutes,
-            blocks,
-            activeConceptId: get().activeConcept?.id ?? '',
-            completed: false,
-          },
+          todaySession: createTodaySession(dayType, get().activeConcept?.id ?? ''),
+          currentBlockId: blocks[0]?.blockId ?? null,
+        })
+      },
+
+      ensureTodaySession: (dayType) => {
+        const dt = dayType ?? getDayTypeFromDate()
+        const today = todayIso()
+        const session = get().todaySession
+        if (session && session.date === today && session.dayType === dt) return
+        const blocks = buildSessionBlocks(dt)
+        set({
+          todaySession: createTodaySession(dt, get().activeConcept?.id ?? ''),
           currentBlockId: blocks[0]?.blockId ?? null,
         })
       },
@@ -480,6 +503,18 @@ export const usePracticeStore = create<PracticeState>()(
             : null,
         })),
     }),
-    { name: 'piano-mastery-practice' },
+    {
+      name: 'piano-mastery-practice',
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        const today = todayIso()
+        if (!state.todaySession || state.todaySession.date !== today) {
+          const dayType = getDayTypeFromDate()
+          const blocks = buildSessionBlocks(dayType)
+          state.todaySession = createTodaySession(dayType, state.activeConcept?.id ?? '')
+          state.currentBlockId = blocks[0]?.blockId ?? null
+        }
+      },
+    },
   ),
 )

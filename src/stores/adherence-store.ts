@@ -38,7 +38,7 @@ const BLOCK_LABELS: Record<string, string> = {
   'transcription-integration': 'Transcription Integration',
   'standards-hymns-lab': 'Standards / Hymns Lab',
   'cold-pressure': 'Cold / Pressure',
-  'agility-fluency-lab': 'Agility & Fluency Lab',
+  'agility-fluency-lab': 'Vocabulary Lab',
   consolidation: 'Consolidation',
   'recording-review': 'Recording Review',
 }

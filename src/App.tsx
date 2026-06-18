@@ -7,6 +7,7 @@ import { Transcriptions } from '@/pages/Transcriptions'
 import { Recordings } from '@/pages/Recordings'
 import { Analytics } from '@/pages/Analytics'
 import { Settings } from '@/pages/Settings'
+import { VocabularyLab } from '@/pages/VocabularyLab'
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
           <Route path="practice" element={<TodaysPractice />} />
+          <Route path="vocabulary" element={<VocabularyLab />} />
           <Route path="library" element={<PracticeLibrary />} />
           <Route path="transcriptions" element={<Transcriptions />} />
           <Route path="recordings" element={<Recordings />} />

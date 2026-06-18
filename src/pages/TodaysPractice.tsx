@@ -9,12 +9,12 @@ import { Progress } from '@/components/ui/progress'
 import { MonthRolloverBanner } from '@/components/month/MonthRolloverBanner'
 import { GuidedSession } from '@/components/practice/GuidedSession'
 import { generateGuidedPhases, getUniqueBlocks } from '@/features/practice-method/guided-phases'
-import { BASE_SESSION_MINUTES, PRACTICE_BLOCKS, currentMonthYear } from '@/types/practice-method'
+import { BASE_SESSION_MINUTES, SESSION_ZONES, currentMonthYear } from '@/types/practice-method'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
-import { cn } from '@/lib/utils'
+import { useVocabularyStore } from '@/stores/vocabulary-store'
 
 function getDayType(): 'identity' | 'expansion' | 'review' {
   const day = new Date().getDay()
@@ -30,7 +30,9 @@ export function TodaysPractice() {
     monthlyTunes,
     monthlyPlan,
     todaySession,
+    deviceBacklog,
     initTodaySession,
+    ensureTodaySession,
     setCurrentBlock,
     isMonthConfigured,
   } = usePracticeStore()
@@ -42,7 +44,8 @@ export function TodaysPractice() {
   const phaseIndex = useGuidedSessionStore((s) => s.phaseIndex)
   const startSession = useGuidedSessionStore((s) => s.startSession)
   const resumeSession = useGuidedSessionStore((s) => s.resumeSession)
-  const lastPeakBpm = useGuidedSessionStore((s) => s.lastPeakBpm)
+  const isDayCompleteForToday = useGuidedSessionStore((s) => s.isDayCompleteForToday())
+  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
 
   const today = new Date().toISOString().split('T')[0]!
   const pausedSession = isPausedForDay && sessionDate === today && phases.length > 0
@@ -51,14 +54,20 @@ export function TodaysPractice() {
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
 
   useEffect(() => {
-    if (!todaySession) initTodaySession(dayType)
-  }, [todaySession, initTodaySession, dayType])
+    ensureTodaySession(dayType)
+  }, [ensureTodaySession, dayType])
 
-  const sessionBlocks = PRACTICE_BLOCKS.filter((b) => {
-    if (dayType === 'review' && b.id === 'consolidation') return false
-    if (dayType !== 'review' && b.id === 'recording-review') return false
-    return true
-  })
+  const sessionZones =
+    dayType === 'review'
+      ? [
+          ...SESSION_ZONES.filter((z) => z.id !== 'technique'),
+          {
+            id: 'technique' as const,
+            name: 'Recording Review',
+            description: 'Sound-target review of your weekly clips',
+          },
+        ]
+      : SESSION_ZONES
 
   const completedCount = todaySession?.blocks.filter((b) => b.completed).length ?? 0
   const totalBlocks = todaySession?.blocks.length ?? 0
@@ -87,11 +96,7 @@ export function TodaysPractice() {
       }
 
       const linkedTranscription =
-        transcriptionProjects.find(
-          (p) =>
-            p.practiceDate === today &&
-            (!p.linkedConceptId || p.linkedConceptId === activeConcept?.id),
-        ) ??
+        transcriptionProjects.find((p) => p.practiceDate === today) ??
         (monthlyPlan?.transcriptionProjectId
           ? transcriptionProjects.find((p) => p.id === monthlyPlan.transcriptionProjectId)
           : undefined) ??
@@ -101,6 +106,7 @@ export function TodaysPractice() {
         dayType,
         activeConcept,
         monthlyTunes,
+        deviceBacklog,
         transcriptionProject: linkedTranscription
           ? `${linkedTranscription.artist} — ${linkedTranscription.title}`
           : monthlyPlan?.transcriptionProject,
@@ -138,6 +144,7 @@ export function TodaysPractice() {
       activeConcept,
       dayType,
       monthlyTunes,
+      deviceBacklog,
       monthlyPlan,
       monthConfigured,
       transcriptionProjects,
@@ -152,7 +159,9 @@ export function TodaysPractice() {
   )
 
   const handleSessionComplete = () => {
-    toast.success('120-minute session complete')
+    if (isDayCompleteForToday) {
+      toast.success('Session complete for today')
+    }
   }
 
   if (isActive) {
@@ -167,6 +176,12 @@ export function TodaysPractice() {
           <p className="text-muted-foreground">
             {BASE_SESSION_MINUTES}-minute guided session · Practice Method v2.0.0
           </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vocabulary Lab lives in the sidebar —{' '}
+            <Link to="/vocabulary" className="text-primary hover:underline">
+              view week &amp; 12-week plan
+            </Link>
+          </p>
         </div>
         <Badge variant={dayType === 'review' ? 'warning' : 'secondary'} className="w-fit">
           {dayType === 'review' ? 'Review Day (Sunday)' : `${dayType} day`}
@@ -174,6 +189,22 @@ export function TodaysPractice() {
       </div>
 
       <MonthRolloverBanner />
+
+      {isDayCompleteForToday && (
+        <Card className="border-success/40 bg-success/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+            <div>
+              <p className="font-medium text-success">Done for today</p>
+              <p className="text-sm text-muted-foreground">
+                Your session is complete. A fresh guided session will be available tomorrow.
+              </p>
+            </div>
+            {lastMotifClarity != null && (
+              <Badge variant="secondary">Motif clarity: {lastMotifClarity}/5</Badge>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {!monthConfigured && (
         <Card className="border-warning/50 bg-warning/5">
@@ -212,8 +243,8 @@ export function TodaysPractice() {
           <div className="space-y-2">
             <h2 className="font-display text-2xl font-bold">Ready to practice?</h2>
             <p className="max-w-md text-sm text-muted-foreground">
-              Enter fullscreen guided mode. You&apos;ll be walked through every phase with timers,
-              instructions, and checkpoints, including the 20-min Agility &amp; Fluency Lab for any piano.
+              Four focused zones, fewer context switches. Timed steps walk you through each phase
+              automatically — pause anytime or tap Done for today when finished.
             </p>
           </div>
 
@@ -230,15 +261,19 @@ export function TodaysPractice() {
             size="lg"
             className="gap-2 px-8 text-base"
             onClick={() => void startGuidedSession(pausedSession)}
-            disabled={!monthConfigured}
+            disabled={!monthConfigured || isDayCompleteForToday}
           >
             <Maximize2 className="h-5 w-5" />
-            {pausedSession ? 'Continue Session' : 'Start Guided Session'}
+            {isDayCompleteForToday
+              ? 'Complete until tomorrow'
+              : pausedSession
+                ? 'Continue Session'
+                : 'Start Guided Session'}
           </Button>
 
-          {lastPeakBpm && (
+          {lastMotifClarity != null && (
             <p className="text-xs text-muted-foreground">
-              Last peak clean BPM (Agility &amp; Fluency): <strong>{lastPeakBpm}</strong>
+              Last motif clarity (fusion week): <strong>{lastMotifClarity}/5</strong>
             </p>
           )}
         </CardContent>
@@ -274,41 +309,23 @@ export function TodaysPractice() {
         </Card>
       )}
 
-      {/* Block overview */}
+      {/* Session zones */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold">Session blocks</h2>
+        <h2 className="mb-3 text-lg font-semibold">Session zones</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Four macro blocks replace six separate switches — same method benefits, less mental overhead.
+        </p>
         <div className="grid gap-3 md:grid-cols-2">
-          {sessionBlocks.map((block, i) => {
-            const sessionBlock = todaySession?.blocks.find((b) => b.blockId === block.id)
-            const isComplete = sessionBlock?.completed ?? false
-
-            return (
-              <Card
-                key={block.id}
-                className={cn(isComplete && 'border-success/40 opacity-75')}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
-                      {i + 1}. {block.name}
-                    </CardTitle>
-                    <Badge variant={isComplete ? 'success' : 'secondary'}>
-                      {block.durationMinutes} min
-                    </Badge>
-                  </div>
-                  <CardDescription>{block.focus}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{block.description}</p>
-                  {block.id === 'agility-fluency-lab' && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Daily 20-min routine: touch check → rotating pattern → agility burst → log BPM
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
+          {sessionZones.map((zone, i) => (
+            <Card key={zone.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  {i + 1}. {zone.name}
+                </CardTitle>
+                <CardDescription>{zone.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          ))}
         </div>
       </div>
 
@@ -318,14 +335,14 @@ export function TodaysPractice() {
           <CardHeader>
             <CardTitle className="text-base">Guided phases today</CardTitle>
             <CardDescription>
-              {generateGuidedPhases({ dayType, activeConcept, monthlyTunes }).length} interactive
-              phases with timers and checkpoints
+              {generateGuidedPhases({ dayType, activeConcept, monthlyTunes, deviceBacklog }).filter((p) => !p.isRecovery).length}{' '}
+              work phases across 4 zones (timed steps auto-advance)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {getUniqueBlocks(
-                generateGuidedPhases({ dayType, activeConcept, monthlyTunes }),
+                generateGuidedPhases({ dayType, activeConcept, monthlyTunes, deviceBacklog }),
               ).map((b) => (
                 <Badge key={b.blockId} variant="outline">
                   {b.blockName} ({b.phaseCount} phases)

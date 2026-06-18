@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileMusic,
   Home,
+  Languages,
   Mic,
   Piano,
   Settings,
@@ -14,10 +15,12 @@ import {
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
 import { Button } from '@/components/ui/button'
+import { APP_NAME } from '@/lib/app-config'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: Home },
   { to: '/practice', label: "Today's Practice", icon: Piano },
+  { to: '/vocabulary', label: 'Vocabulary Lab', icon: Languages },
   { to: '/library', label: 'Practice Library', icon: BookOpen },
   { to: '/transcriptions', label: 'Transcriptions', icon: FileMusic },
   { to: '/recordings', label: 'Recordings', icon: Mic },
@@ -39,7 +42,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-primary" />
-            <span className="font-display text-sm font-semibold text-primary">Piano Mastery OS</span>
+            <span className="font-display text-sm font-semibold text-primary">{APP_NAME}</span>
           </div>
         )}
         <Button variant="ghost" size="icon" onClick={toggleSidebar} className="shrink-0">

@@ -69,7 +69,7 @@ export function generatePracticeSession(input: SessionInput): GeneratedSession {
     recoveryPeriods: [
       { afterBlock: 'concept-forge', minutes: 1, activity: 'Stand, shake hands, 3 deep breaths' },
       { afterBlock: 'standards-hymns-lab', minutes: 2, activity: 'Hydrate, shoulder rolls, reset ears' },
-      { afterBlock: 'agility-fluency-lab', minutes: 1, activity: 'Shake out forearms, roll wrists' },
+      { afterBlock: 'agility-fluency-lab', minutes: 1, activity: 'Shake hands, reset ears after vocabulary work' },
     ],
     estimatedCompletionTime: formatCompletion(cursor),
   }
@@ -88,9 +88,9 @@ function getBlockInstructions(
       ]
     case 'transcription-integration':
       return [
-        'Link concept to hero transcription — shared harmonic language',
-        'Three Key Pass: original, neighbor, gig key',
-        'Deploy in 2 of 3 monthly tunes at mapped points',
+        'Language acquisition from any hero recording',
+        'Listen, sing, and internalize lines — not tied to active concept',
+        'Optional deploy of stolen vocabulary into monthly tunes',
       ]
     case 'standards-hymns-lab':
       return [
@@ -107,10 +107,10 @@ function getBlockInstructions(
       ]
     case 'agility-fluency-lab':
       return [
-        'Instrument Calibration (3 min): adapt to THIS piano — touch map, registers, pedal',
-        'Fluency Circuit (8 min): weekly rotation — scales, arpeggios, bebop, or Peterson cells',
-        'Agility Drills (7 min): finger independence, rotation, velocity bursts — no score needed',
-        'Peak Velocity Snapshot (2 min): log highest clean BPM in Session Notes',
+        'Sound immersion: hear today\'s pentatonic, blues, or altered color',
+        'Sing → call/response → motif extraction (language, not scales)',
+        'Harmonic deployment on monthly tune or ii–V–I',
+        'Tri-sound integration: pentatonic, blues, altered in one phrase',
       ]
     case 'consolidation':
       return [
@@ -149,10 +149,9 @@ function getSubBlocks(
   }
   if (blockId === 'agility-fluency-lab') {
     return [
-      { name: 'Instrument Calibration', minutes: 3, instructions: [] },
-      { name: 'Fluency Circuit', minutes: 8, instructions: [] },
-      { name: 'Agility Drills', minutes: 7, instructions: [] },
-      { name: 'Peak Velocity Snapshot', minutes: 2, instructions: [] },
+      { name: 'Hear & sing', minutes: 8, instructions: [] },
+      { name: 'Call & motif', minutes: 10, instructions: [] },
+      { name: 'Deploy & integrate', minutes: 7, instructions: [] },
     ]
   }
   return undefined

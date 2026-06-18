@@ -8,15 +8,11 @@ import { useTranscriptionStore } from '@/stores/transcription-store'
 import { currentMonthYear } from '@/types/practice-method'
 
 interface DailyTranscriptionCaptureProps {
-  conceptLabel: string
-  conceptId: string
   practiceDate: string
   onSaved: (projectId: string) => void
 }
 
 export function DailyTranscriptionCapture({
-  conceptLabel,
-  conceptId,
   practiceDate,
   onSaved,
 }: DailyTranscriptionCaptureProps) {
@@ -65,14 +61,13 @@ export function DailyTranscriptionCapture({
       endSeconds != null && startSeconds != null
         ? [
             {
-              label: barRange.trim() ? `Hero moment · ${barRange.trim()}` : "Today's hero moment",
+              label: barRange.trim() ? `Line · ${barRange.trim()}` : "Today's line",
               startSeconds,
               endSeconds,
               barRange: barRange.trim() || undefined,
               chordContext: chordContext.trim() || undefined,
               notes: notes.trim() || undefined,
               status: 'listening' as const,
-              linkedConceptId: conceptId,
             },
           ]
         : []
@@ -84,21 +79,19 @@ export function DailyTranscriptionCapture({
       key: key.trim() || undefined,
       monthYear: currentMonthYear(),
       practiceDate,
-      linkedConceptId: conceptId,
       segments,
     })
 
-    toast.success("Today's hero transcription saved")
+    toast.success("Today's language line saved")
     onSaved(projectId)
   }
 
   return (
     <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
-      <p className="mb-1 text-sm font-semibold text-primary">Today&apos;s hero recording</p>
+      <p className="mb-1 text-sm font-semibold text-primary">Today&apos;s recording</p>
       <p className="mb-4 text-xs text-muted-foreground">
-        Link Concept to Hero starts fresh each day. Add the recording you&apos;re drawing from today and
-        mark the moment that connects to <strong>{conceptLabel}</strong>. It saves to your Transcriptions
-        list automatically.
+        Language Acquisition is about absorbing jazz vocabulary from any hero you love — not matching
+        your active concept. Add the recording and passage you want to internalize today.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -119,7 +112,7 @@ export function DailyTranscriptionCapture({
 
         <div className="rounded-md border border-border bg-background/60 p-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Hero moment (optional now — you can add more sections after saving)
+            Target passage (optional now — add more sections after saving)
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Section start" value={sectionStart} onChange={setSectionStart} placeholder="1:32" />
@@ -132,7 +125,7 @@ export function DailyTranscriptionCapture({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Why this moment connects to your concept…"
+              placeholder="What draws you to this line — feel, voicing, rhythm…"
               rows={2}
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
@@ -146,7 +139,7 @@ export function DailyTranscriptionCapture({
         </div>
 
         <Button type="submit" className="w-full sm:w-auto">
-          Save today&apos;s transcription & continue
+          Save & continue
         </Button>
       </form>
     </div>

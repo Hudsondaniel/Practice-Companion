@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Maximize2 } from 'lucide-react'
 import {
@@ -26,15 +26,29 @@ import { usePracticeStore } from '@/stores/practice-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { useAdherenceStore } from '@/stores/adherence-store'
-import { BASE_SESSION_MINUTES, currentMonthYear } from '@/types/practice-method'
+import { currentMonthYear } from '@/types/practice-method'
+import { getVocabularyContext } from '@/features/vocabulary-lab/rotation'
+import { VocabularyWeekCard } from '@/components/vocabulary/VocabularyWeekCard'
+import { useVocabularyStore } from '@/stores/vocabulary-store'
+import { APP_TAGLINE } from '@/lib/app-config'
 import { formatTime } from '@/lib/utils'
 
 export function Dashboard() {
-  const { activeConcept, todaySession, monthlyPlan } = usePracticeStore()
+  const { activeConcept, todaySession, monthlyPlan, ensureTodaySession } = usePracticeStore()
   const practiceDays = useStreakStore((s) => s.practiceDays)
   const history = useAdherenceStore((s) => s.history)
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
-  const { lastPeakBpm, getDailyElapsedSeconds } = useGuidedSessionStore()
+  const { getDailyElapsedSeconds } = useGuidedSessionStore()
+  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
+  const { cycleStartDate, curriculumLevel } = useVocabularyStore()
+  const vocabCtx = useMemo(
+    () => getVocabularyContext(cycleStartDate, curriculumLevel),
+    [cycleStartDate, curriculumLevel],
+  )
+
+  useEffect(() => {
+    ensureTodaySession()
+  }, [ensureTodaySession])
 
   const currentStreak = useMemo(() => {
     if (practiceDays.length === 0) return 0
@@ -72,9 +86,7 @@ export function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Practice Method v2.0.0 · {BASE_SESSION_MINUTES}-minute guided sessions
-          </p>
+          <p className="text-muted-foreground">{APP_TAGLINE}</p>
         </div>
         <Button asChild size="lg" className="gap-2">
           <Link to="/practice">
@@ -86,6 +98,14 @@ export function Dashboard() {
 
       <MonthRolloverBanner />
       <WeekContextBar />
+      <VocabularyWeekCard compact />
+      <p className="text-sm text-muted-foreground">
+        <Link to="/vocabulary" className="text-primary hover:underline">
+          Open Vocabulary Lab →
+        </Link>
+        {' · '}
+        Week {vocabCtx.macroWeek}/12 · {vocabCtx.module.title}
+      </p>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Practice Streak" value={`${currentStreak} days`} accent />
@@ -93,7 +113,14 @@ export function Dashboard() {
           label="Today's Blocks"
           value={`${completedBlocks}/${totalBlocks}`}
         />
-        <StatCard label="Peak BPM" value={lastPeakBpm ? String(lastPeakBpm) : EMPTY} />
+        <StatCard
+          label="Vocabulary week"
+          value={`${vocabCtx.macroWeek}/12`}
+        />
+        <StatCard
+          label="Motif clarity"
+          value={lastMotifClarity != null ? `${lastMotifClarity}/5` : EMPTY}
+        />
         <StatCard
           label="Session time today"
           value={formatTime(getDailyElapsedSeconds())}
@@ -144,8 +171,8 @@ export function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>This month&apos;s hero lines</CardTitle>
-            <CardDescription>Daily transcriptions from Link Concept to Hero</CardDescription>
+            <CardTitle>This month&apos;s language lines</CardTitle>
+            <CardDescription>Daily recordings from Language Acquisition</CardDescription>
           </CardHeader>
           <CardContent>
             {weekHeroes.length === 0 ? (

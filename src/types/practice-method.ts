@@ -37,10 +37,10 @@ export const PRACTICE_BLOCKS: PracticeBlock[] = [
   },
   {
     id: 'transcription-integration',
-    name: 'Transcription Integration',
-    durationMinutes: 20,
-    focus: 'Link concept to transcription',
-    description: 'Connect active concept to hero lines, borrow one gesture, integrate through keys and monthly tunes',
+    name: 'Language Acquisition',
+    durationMinutes: 25,
+    focus: 'Absorb jazz language from recordings',
+    description: 'Listen, sing, and internalize lines from any hero — vocabulary building, not concept matching',
   },
   {
     id: 'standards-hymns-lab',
@@ -58,11 +58,11 @@ export const PRACTICE_BLOCKS: PracticeBlock[] = [
   },
   {
     id: 'agility-fluency-lab',
-    name: 'Agility & Fluency Lab',
-    durationMinutes: 20,
-    focus: 'Portable technique on any piano',
+    name: 'Vocabulary Lab',
+    durationMinutes: 25,
+    focus: 'Improvisational language — pentatonic, blues, altered',
     description:
-      'Instrument calibration, fluency circuits, agility drills, and peak velocity snapshot — works on any action',
+      'Spiral curriculum: hear, sing, motif, deploy, and integrate sounds as vocabulary — not scale drills',
   },
   {
     id: 'consolidation',
@@ -84,7 +84,43 @@ export interface GuidedStep {
   summary: string
   detail: string
   example?: string
+  /** When set, participates in step timing allocation for the phase */
+  durationSeconds?: number
+  pedagogy?: StepPedagogy
 }
+
+export interface StepPedagogy {
+  why: string
+  skill: string
+  masters: string
+  listenFor: string
+  measure: string
+}
+
+export type SessionZone = 'deep-work' | 'language' | 'repertoire' | 'technique'
+
+export const SESSION_ZONES: { id: SessionZone; name: string; description: string }[] = [
+  {
+    id: 'deep-work',
+    name: 'Deep Work',
+    description: 'Concept reps, tune deployment, and ear training in one focused stretch',
+  },
+  {
+    id: 'language',
+    name: 'Language Acquisition',
+    description: 'Absorb vocabulary from any hero recording — not tied to your active concept',
+  },
+  {
+    id: 'repertoire',
+    name: 'Repertoire & Transfer',
+    description: 'Monthly tunes, pressure tests, and trust runs without extra block switches',
+  },
+  {
+    id: 'technique',
+    name: 'Vocabulary & Integration',
+    description: 'Pentatonic, blues, and altered language — motif development and tri-sound integration',
+  },
+]
 
 export interface GuidedPhase {
   id: string
@@ -110,6 +146,8 @@ export interface GuidedPhase {
   showAutomaticityChecklist?: boolean
   /** Prompt clarity rating 1-5 after phase */
   promptClarityRating?: boolean
+  /** Macro zone for reduced context-switching (4 zones per session) */
+  sessionZone?: SessionZone
 }
 
 export interface DeviceBacklogItem {
