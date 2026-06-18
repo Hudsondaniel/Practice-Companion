@@ -251,6 +251,23 @@ export interface Database {
           completed?: boolean
         }
       }
+      user_app_snapshots: {
+        Row: {
+          user_id: string
+          snapshot: Json
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          snapshot?: Json
+          updated_at?: string
+        }
+        Update: {
+          snapshot?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

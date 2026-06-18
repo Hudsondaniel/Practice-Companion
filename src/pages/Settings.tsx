@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AuthPanel } from '@/components/auth/AuthPanel'
 import { Moon, Sun, Monitor } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -67,7 +68,19 @@ export function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Supabase</CardTitle>
+          <CardTitle>Account &amp; cloud sync</CardTitle>
+          <CardDescription>
+            Sign in to save practice data to Supabase and load it on any device.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AuthPanel />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Supabase connection</CardTitle>
           <CardDescription>
             Use the <strong>publishable</strong> key in Vercel — never the secret key.
           </CardDescription>
@@ -101,9 +114,9 @@ export function Settings() {
             </p>
           )}
           <p className="text-xs text-muted-foreground border-t border-border pt-3">
-            Practice data still saves in this browser until cloud sync is implemented. Supabase stores
-            the schema; run <span className="font-mono">supabase/migrations/001_initial_schema.sql</span>{' '}
-            in the SQL Editor once.
+            Run migrations in Supabase SQL Editor:{' '}
+            <span className="font-mono">001_initial_schema.sql</span> then{' '}
+            <span className="font-mono">002_user_app_snapshots.sql</span>.
           </p>
         </CardContent>
       </Card>
