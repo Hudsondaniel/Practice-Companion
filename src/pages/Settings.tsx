@@ -69,14 +69,14 @@ export function Settings() {
         <CardHeader>
           <CardTitle>Supabase</CardTitle>
           <CardDescription>
-            Frontend uses project URL + anon key (.env). Postgres URL is for migrations only.
+            Use the <strong>publishable</strong> key in Vercel — never the secret key.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm">Env configured:</span>
             <Badge variant={isSupabaseConfigured ? 'success' : 'warning'}>
-              {isSupabaseConfigured ? 'Yes' : 'Missing anon key'}
+              {isSupabaseConfigured ? 'Yes' : 'Missing publishable key'}
             </Badge>
           </div>
           {supabaseProjectUrl && (
@@ -85,10 +85,12 @@ export function Settings() {
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Add <span className="font-mono">VITE_SUPABASE_ANON_KEY</span> to{' '}
-            <span className="font-mono">.env</span> (from Supabase → Settings → API → anon public),
-            then restart <span className="font-mono">npm run dev</span>. On Vercel, set the same vars
-            and redeploy.
+            Copy the <strong>Publishable key</strong> (<span className="font-mono">sb_publishable_…</span>)
+            from Supabase → Settings → API. Set{' '}
+            <span className="font-mono">VITE_SUPABASE_PUBLISHABLE_KEY</span> in{' '}
+            <span className="font-mono">.env</span> locally, or in Vercel → Environment Variables, then
+            redeploy. Do <strong>not</strong> use <span className="font-mono">sb_secret_…</span> in the
+            browser.
           </p>
           <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing}>
             {testing ? 'Testing…' : 'Test Supabase connection'}
