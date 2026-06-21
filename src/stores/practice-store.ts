@@ -12,6 +12,13 @@ import type {
 } from '@/types/practice-method'
 import { currentMonthYear } from '@/types/practice-method'
 import { PRACTICE_BLOCKS } from '@/types/practice-method'
+import {
+  createDefaultPracticeSchedule,
+  getDayTypeForDate,
+  getReviewWeekday,
+  normalizePracticeSchedule,
+  type PracticeWeekSchedule,
+} from '@/types/practice-schedule'
 
 interface PracticeState {
   activeConcept: ActiveConcept | null
@@ -23,6 +30,13 @@ interface PracticeState {
   currentBlockId: PracticeBlockId | null
   streak: number
   weeklyHours: number
+  practiceSchedule: PracticeWeekSchedule
+
+  setPracticeSchedule: (schedule: PracticeWeekSchedule) => void
+  updateWeekdaySchedule: (
+    index: number,
+    update: Partial<PracticeWeekSchedule['days'][number]>,
+  ) => void
 
   isMonthConfigured: (monthYear?: string) => boolean
   needsMonthRollover: () => boolean
@@ -66,11 +80,8 @@ function buildSessionBlocks(dayType: DayType): SessionBlock[] {
   }))
 }
 
-function getDayTypeFromDate(): DayType {
-  const day = new Date().getDay()
-  if (day === 0) return 'review'
-  if (day <= 3) return 'identity'
-  return 'expansion'
+function getDayTypeFromDate(schedule: PracticeWeekSchedule): DayType | null {
+  return getDayTypeForDate(schedule)
 }
 
 function todayIso(): string {
@@ -101,6 +112,27 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
       currentBlockId: null,
       streak: 0,
       weeklyHours: 0,
+      practiceSchedule: createDefaultPracticeSchedule(),
+
+      setPracticeSchedule: (schedule) => {
+        const normalized = normalizePracticeSchedule(schedule)
+        const reviewDay = getReviewWeekday(normalized)
+        set((s) => ({
+          practiceSchedule: normalized,
+          monthlyPlan:
+            s.monthlyPlan && reviewDay != null
+              ? { ...s.monthlyPlan, reviewDay }
+              : s.monthlyPlan,
+        }))
+      },
+
+      updateWeekdaySchedule: (index, update) => {
+        const schedule = get().practiceSchedule
+        const days = [...schedule.days] as PracticeWeekSchedule['days']
+        if (index < 0 || index > 6) return
+        days[index] = { ...days[index], ...update }
+        get().setPracticeSchedule({ days })
+      },
 
       isMonthConfigured: (monthYear = currentMonthYear()) => {
         const plan = get().monthlyPlan
@@ -140,8 +172,8 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
       softRestartMonth: () => {
         const plan = get().monthlyPlan
         if (!plan) return
-        const dayType = getDayTypeFromDate()
-        get().initTodaySession(dayType)
+        const dayType = getDayTypeFromDate(get().practiceSchedule)
+        if (dayType) get().initTodaySession(dayType)
         if (get().activeConcept) {
           set({
             activeConcept: {
@@ -379,9 +411,18 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
       },
 
       ensureTodaySession: (dayType) => {
-        const dt = dayType ?? getDayTypeFromDate()
+        const schedule = get().practiceSchedule
+        const dt = dayType ?? getDayTypeFromDate(schedule)
         const today = todayIso()
         const session = get().todaySession
+
+        if (!dt) {
+          if (session?.date === today) {
+            set({ todaySession: null, currentBlockId: null })
+          }
+          return
+        }
+
         if (session && session.date === today && session.dayType === dt) return
         const blocks = buildSessionBlocks(dt)
         set({

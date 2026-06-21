@@ -16,17 +16,8 @@ function todayIso(date = new Date()): string {
   return date.toISOString().split('T')[0]!
 }
 
-function computeStreak(sortedDays: string[], fromDate: string): number {
-  if (sortedDays.length === 0) return 0
-  const set = new Set(sortedDays)
-  let streak = 0
-  const cursor = new Date(fromDate + 'T12:00:00')
-  while (set.has(cursor.toISOString().split('T')[0]!)) {
-    streak++
-    cursor.setDate(cursor.getDate() - 1)
-  }
-  return streak
-}
+import { computeStreakWithSchedule } from '@/types/practice-schedule'
+import { usePracticeStore } from '@/stores/practice-store'
 
 function computeLongest(sortedDays: string[]): number {
   if (sortedDays.length === 0) return 0
@@ -55,14 +46,20 @@ export const useStreakStore = create<StreakState>()((set, get) => ({
         const { practiceDays } = get()
         if (practiceDays.includes(date)) return
         const next = [...practiceDays, date].sort()
-        const current = computeStreak(next, date)
+        const schedule = usePracticeStore.getState().practiceSchedule
+        const current = computeStreakWithSchedule(next, date, schedule)
         set({
           practiceDays: next,
           longestStreak: Math.max(get().longestStreak, current, computeLongest(next)),
         })
       },
 
-      getCurrentStreak: (today = todayIso()) => computeStreak(get().practiceDays, today),
+      getCurrentStreak: (today = todayIso()) =>
+        computeStreakWithSchedule(
+          get().practiceDays,
+          today,
+          usePracticeStore.getState().practiceSchedule,
+        ),
 
       getLongestStreak: () => Math.max(get().longestStreak, computeLongest(get().practiceDays)),
 

@@ -33,10 +33,13 @@ import { VocabularyWeekCard } from '@/components/vocabulary/VocabularyWeekCard'
 import { useVocabularyStore } from '@/stores/vocabulary-store'
 import { APP_TAGLINE, CONCEPT_STAGE_LABELS } from '@/lib/app-config'
 import { formatTime } from '@/lib/utils'
+import { isPracticeDay } from '@/lib/month-context'
 
 export function Dashboard() {
-  const { activeConcept, todaySession, monthlyPlan, ensureTodaySession } = usePracticeStore()
+  const { activeConcept, todaySession, monthlyPlan, ensureTodaySession, practiceSchedule } =
+    usePracticeStore()
   const practiceDays = useStreakStore((s) => s.practiceDays)
+  const getCurrentStreak = useStreakStore((s) => s.getCurrentStreak)
   const history = useAdherenceStore((s) => s.history)
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const { getDailyElapsedSeconds } = useGuidedSessionStore()
@@ -51,18 +54,8 @@ export function Dashboard() {
     ensureTodaySession()
   }, [ensureTodaySession])
 
-  const currentStreak = useMemo(() => {
-    if (practiceDays.length === 0) return 0
-    const set = new Set(practiceDays)
-    const today = new Date().toISOString().split('T')[0]!
-    let streak = 0
-    const cursor = new Date(today + 'T12:00:00')
-    while (set.has(cursor.toISOString().split('T')[0]!)) {
-      streak++
-      cursor.setDate(cursor.getDate() - 1)
-    }
-    return streak
-  }, [practiceDays])
+  const currentStreak = useMemo(() => getCurrentStreak(), [getCurrentStreak, practiceDays, practiceSchedule])
+  const showStartSession = isPracticeDay()
 
   const weekHeroes = useMemo(() => {
     const month = currentMonthYear()
@@ -89,10 +82,10 @@ export function Dashboard() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">{APP_TAGLINE}</p>
         </div>
-        <Button asChild size="lg" className="gap-2">
+        <Button asChild size="lg" className="gap-2" disabled={!showStartSession}>
           <Link to="/practice">
             <Maximize2 className="h-4 w-4" />
-            Start Guided Session
+            {showStartSession ? 'Start Guided Session' : 'Rest day'}
           </Link>
         </Button>
       </div>

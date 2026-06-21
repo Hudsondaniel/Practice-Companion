@@ -1,4 +1,4 @@
-import type { GuidedPhase } from '@/types/practice-method'
+import { createDefaultPracticeSchedule, getDayTypeForDate, normalizePracticeSchedule } from '@/types/practice-schedule'
 import {
   APP_SNAPSHOT_VERSION,
   type AppSnapshot,
@@ -12,13 +12,7 @@ import { useSessionToolsStore } from '@/stores/session-tools-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { useVocabularyStore } from '@/stores/vocabulary-store'
-
-function getDayTypeFromDateLocal(): 'identity' | 'expansion' | 'review' {
-  const day = new Date().getDay()
-  if (day === 0) return 'review'
-  if (day <= 3) return 'identity'
-  return 'expansion'
-}
+import type { GuidedPhase } from '@/types/practice-method'
 
 function todayIso(): string {
   return new Date().toISOString().split('T')[0]!
@@ -38,6 +32,7 @@ export function createEmptyAppSnapshot(): AppSnapshot {
       currentBlockId: null,
       streak: 0,
       weeklyHours: 0,
+      practiceSchedule: createDefaultPracticeSchedule(),
     },
     transcriptions: {
       projects: [],
@@ -101,6 +96,7 @@ export function collectAppSnapshot(): AppSnapshot {
       currentBlockId: practice.currentBlockId,
       streak: practice.streak,
       weeklyHours: practice.weeklyHours,
+      practiceSchedule: practice.practiceSchedule,
     },
     transcriptions: {
       projects: transcriptions.projects,
@@ -156,8 +152,11 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
     currentBlockId: snapshot.practice.currentBlockId,
     streak: snapshot.practice.streak,
     weeklyHours: snapshot.practice.weeklyHours,
+    practiceSchedule: normalizePracticeSchedule(snapshot.practice.practiceSchedule),
   })
-  usePracticeStore.getState().ensureTodaySession(getDayTypeFromDateLocal())
+  usePracticeStore.getState().ensureTodaySession(
+    getDayTypeForDate(normalizePracticeSchedule(snapshot.practice.practiceSchedule)) ?? undefined,
+  )
 
   useTranscriptionStore.setState({
     projects: snapshot.transcriptions.projects,
@@ -231,5 +230,3 @@ export function parseAppSnapshot(raw: unknown): AppSnapshot | null {
   if (!isAppSnapshot(raw)) return null
   return raw
 }
-
-export { getDayTypeFromDateLocal as getDayTypeFromDate }

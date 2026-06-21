@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { APP_SNAPSHOT_VERSION, isAppSnapshot } from '@/types/app-snapshot'
 import type { CurriculumLevel } from '@/features/vocabulary-lab/types'
+import { createDefaultPracticeSchedule } from '@/types/practice-schedule'
 import { snapshotIsEmpty } from '@/lib/supabase-sync/snapshot'
 
 describe('app snapshot', () => {
@@ -17,6 +18,7 @@ describe('app snapshot', () => {
         currentBlockId: null,
         streak: 0,
         weeklyHours: 0,
+        practiceSchedule: createDefaultPracticeSchedule(),
       },
       transcriptions: { projects: [], activeProjectId: null, selectedSegmentId: null },
       vocabulary: { curriculumLevel: 1 as CurriculumLevel, cycleStartDate: '2026-06-01', lastMotifClarityRating: null },

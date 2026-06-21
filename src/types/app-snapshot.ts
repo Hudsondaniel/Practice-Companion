@@ -7,6 +7,7 @@ import type {
   MonthlyTune,
   PracticeBlockId,
 } from '@/types/practice-method'
+import type { PracticeWeekSchedule } from '@/types/practice-schedule'
 import type { TranscriptionProject } from '@/types/transcription'
 import type { CurriculumLevel } from '@/features/vocabulary-lab/types'
 import type { MetronomeSound, MetronomeSubdivision } from '@/lib/metronome'
@@ -23,6 +24,7 @@ export interface PracticeSnapshot {
   currentBlockId: PracticeBlockId | null
   streak: number
   weeklyHours: number
+  practiceSchedule: PracticeWeekSchedule
 }
 
 export interface TranscriptionSnapshot {
