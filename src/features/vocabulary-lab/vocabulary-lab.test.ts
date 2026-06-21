@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { allocateStepDurations } from '@/lib/step-timing'
 import { buildVocabularyLabSession } from '@/features/vocabulary-lab/daily-session'
-import { defaultCycleStartDate } from '@/features/vocabulary-lab/rotation'
 
 describe('buildVocabularyLabSession', () => {
   it('produces 6 steps totaling 25 minutes for a normal week', () => {
     const session = buildVocabularyLabSession(['C', 'F', 'Bb'], {
-      cycleStartDate: defaultCycleStartDate(),
-      date: new Date('2026-06-15T12:00:00'),
+      currentWeek: 2,
     })
     expect(session.steps).toHaveLength(6)
     expect(session.durationMinutes).toBe(25)
@@ -17,10 +15,7 @@ describe('buildVocabularyLabSession', () => {
   })
 
   it('includes pedagogy on every step', () => {
-    const session = buildVocabularyLabSession(['C'], {
-      cycleStartDate: defaultCycleStartDate(),
-      date: new Date('2026-06-15T12:00:00'),
-    })
+    const session = buildVocabularyLabSession(['C'], { currentWeek: 1 })
     for (const step of session.steps) {
       expect(step.pedagogy?.why).toBeTruthy()
       expect(step.pedagogy?.masters).toBeTruthy()
@@ -28,12 +23,8 @@ describe('buildVocabularyLabSession', () => {
   })
 
   it('flags fusion weeks for motif clarity', () => {
-    const session = buildVocabularyLabSession(['C'], {
-      cycleStartDate: '2026-03-01',
-      date: new Date('2026-03-22T12:00:00'),
-    })
-    if (session.meta.macroWeek === 4) {
-      expect(session.promptMotifClarity).toBe(true)
-    }
+    const session = buildVocabularyLabSession(['C'], { currentWeek: 4 })
+    expect(session.meta.macroWeek).toBe(4)
+    expect(session.promptMotifClarity).toBe(true)
   })
 })

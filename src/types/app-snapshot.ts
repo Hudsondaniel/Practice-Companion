@@ -35,7 +35,8 @@ export interface TranscriptionSnapshot {
 
 export interface VocabularySnapshot {
   curriculumLevel: CurriculumLevel
-  cycleStartDate: string
+  currentWeek: number
+  cycleStartedAt: string | null
   lastMotifClarityRating: number | null
 }
 

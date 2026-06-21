@@ -19,7 +19,7 @@ const PHASE_MINUTES = 25
 export function buildVocabularyLabSession(
   keyCluster: string[],
   options: {
-    cycleStartDate: string
+    currentWeek: number
     level?: CurriculumLevel
     date?: Date
     monthlyTuneTitles?: string[]
@@ -27,7 +27,7 @@ export function buildVocabularyLabSession(
 ): VocabularyLabSession {
   const date = options.date ?? new Date()
   const level = options.level ?? 1
-  const ctx = getVocabularyContext(options.cycleStartDate, level, date)
+  const ctx = getVocabularyContext(options.currentWeek, level, date)
   const tuneHint =
     options.monthlyTuneTitles && options.monthlyTuneTitles.length > 0
       ? options.monthlyTuneTitles.join(', ')

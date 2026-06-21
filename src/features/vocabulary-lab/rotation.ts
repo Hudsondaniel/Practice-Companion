@@ -12,6 +12,11 @@ const DAY_VARIANTS = [
   'Focus: integration and form',
 ] as const
 
+export function clampMacroWeek(week: number): number {
+  return Math.min(12, Math.max(1, Math.round(week)))
+}
+
+/** @deprecated Legacy calendar-based start — used only when migrating old saves */
 export function defaultCycleStartDate(date = new Date()): string {
   const d = new Date(date)
   d.setHours(12, 0, 0, 0)
@@ -27,11 +32,14 @@ export function weeksSinceCycleStart(cycleStartDate: string, date = new Date()):
   return Math.max(0, Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)))
 }
 
-/** Macro week 1–12 within the curriculum cycle */
-export function getMacroWeek(cycleStartDate: string, date = new Date()): number {
+/** @deprecated Legacy calendar week — use stored currentWeek instead */
+export function getMacroWeekFromStartDate(cycleStartDate: string, date = new Date()): number {
   const elapsed = weeksSinceCycleStart(cycleStartDate, date)
   return (elapsed % 12) + 1
 }
+
+/** @deprecated alias */
+export const getMacroWeek = getMacroWeekFromStartDate
 
 export function getDayVariant(date = new Date()): string {
   return DAY_VARIANTS[date.getDay()] ?? DAY_VARIANTS[0]
@@ -46,19 +54,26 @@ export function getWeekModule(level: CurriculumLevel, macroWeek: number) {
   return getLevel1Week(macroWeek)
 }
 
+/** Self-paced: week comes from user choice, not elapsed calendar time */
 export function getVocabularyContext(
-  cycleStartDate: string,
+  currentWeek: number,
   level: CurriculumLevel,
   date = new Date(),
 ) {
-  const macroWeek = getMacroWeek(cycleStartDate, date)
+  const macroWeek = clampMacroWeek(currentWeek)
   const module = getWeekModule(level, macroWeek)
   return {
     macroWeek,
     module,
     isFusionWeek: module.isFusionWeek,
-    isDeload: isDeloadWeek(date),
+    /** Calendar deload off — user advances weeks manually */
+    isDeload: false,
     dayVariant: getDayVariant(date),
     level,
   }
+}
+
+/** Optional helper if other features still need calendar deload awareness */
+export function isCalendarDeloadWeek(date = new Date()): boolean {
+  return isDeloadWeek(date)
 }

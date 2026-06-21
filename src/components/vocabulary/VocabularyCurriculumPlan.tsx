@@ -30,9 +30,9 @@ export function VocabularyCurriculumPlan({
   id = 'vocabulary-plan',
 }: VocabularyCurriculumPlanProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const cycleStartDate = useVocabularyStore((s) => s.cycleStartDate)
+  const currentWeek = useVocabularyStore((s) => s.currentWeek)
   const level = useVocabularyStore((s) => s.curriculumLevel)
-  const ctx = getVocabularyContext(cycleStartDate, level)
+  const ctx = getVocabularyContext(currentWeek, level)
 
   return (
     <Card id={id} className="scroll-mt-6">
@@ -41,8 +41,8 @@ export function VocabularyCurriculumPlan({
           <div>
             <CardTitle className="text-base">12-week Vocabulary Lab plan</CardTitle>
             <CardDescription>
-              Level {level} spiral cycle — not a 12-month calendar. Your monthly tune plan lives in
-              Practice Library.
+              Level {level} spiral — move at your own pace. Your monthly tune plan lives in Practice
+              Library.
             </CardDescription>
           </div>
           <Button

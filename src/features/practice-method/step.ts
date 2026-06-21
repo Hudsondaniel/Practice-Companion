@@ -13,7 +13,7 @@ export function stepsFromStrings(items: string[]): GuidedStep[] {
 export function vocabularyLabSteps(
   keyCluster: string[],
   options: {
-    cycleStartDate: string
+    currentWeek: number
     level?: CurriculumLevel
     date?: Date
     monthlyTuneTitles?: string[]

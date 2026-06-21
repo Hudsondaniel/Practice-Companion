@@ -318,9 +318,9 @@ export function generateGuidedPhases(ctx: PhaseContext): GuidedPhase[] {
   }
 
   if (blockIds.includes('agility-fluency-lab')) {
-    const { cycleStartDate, curriculumLevel } = useVocabularyStore.getState()
+    const { currentWeek, curriculumLevel } = useVocabularyStore.getState()
     const vocab = vocabularyLabSteps(activeConcept.keyFocusCluster, {
-      cycleStartDate,
+      currentWeek,
       level: curriculumLevel,
       date,
       monthlyTuneTitles: monthlyTunes.map((t) => t.title),

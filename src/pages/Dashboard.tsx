@@ -46,10 +46,11 @@ export function Dashboard() {
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const { getDailyElapsedSeconds } = useGuidedSessionStore()
   const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
-  const { cycleStartDate, curriculumLevel } = useVocabularyStore()
+  const currentWeek = useVocabularyStore((s) => s.currentWeek)
+  const { curriculumLevel } = useVocabularyStore()
   const vocabCtx = useMemo(
-    () => getVocabularyContext(cycleStartDate, curriculumLevel),
-    [cycleStartDate, curriculumLevel],
+    () => getVocabularyContext(currentWeek, curriculumLevel),
+    [currentWeek, curriculumLevel],
   )
 
   useEffect(() => {

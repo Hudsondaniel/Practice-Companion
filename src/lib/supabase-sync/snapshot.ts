@@ -4,7 +4,7 @@ import {
   type AppSnapshot,
   isAppSnapshot,
 } from '@/types/app-snapshot'
-import { defaultCycleStartDate } from '@/features/vocabulary-lab/rotation'
+import { normalizeVocabularyFromSnapshot } from '@/stores/vocabulary-store'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -41,7 +41,8 @@ export function createEmptyAppSnapshot(): AppSnapshot {
     },
     vocabulary: {
       curriculumLevel: 1,
-      cycleStartDate: defaultCycleStartDate(),
+      currentWeek: 1,
+      cycleStartedAt: null,
       lastMotifClarityRating: null,
     },
     adherence: { history: [] },
@@ -105,7 +106,8 @@ export function collectAppSnapshot(): AppSnapshot {
     },
     vocabulary: {
       curriculumLevel: vocabulary.curriculumLevel,
-      cycleStartDate: vocabulary.cycleStartDate,
+      currentWeek: vocabulary.currentWeek,
+      cycleStartedAt: vocabulary.cycleStartedAt,
       lastMotifClarityRating: vocabulary.lastMotifClarityRating,
     },
     adherence: {
@@ -164,7 +166,7 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
     selectedSegmentId: snapshot.transcriptions.selectedSegmentId,
   })
 
-  useVocabularyStore.setState(snapshot.vocabulary)
+  useVocabularyStore.setState(normalizeVocabularyFromSnapshot(snapshot.vocabulary))
 
   useAdherenceStore.setState({
     history: snapshot.adherence.history,

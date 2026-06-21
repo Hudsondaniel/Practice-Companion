@@ -21,10 +21,11 @@ export function Analytics() {
   const history = useAdherenceStore((s) => s.history)
   const practiceDays = useStreakStore((s) => s.practiceDays)
   const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
-  const { cycleStartDate, curriculumLevel } = useVocabularyStore()
+  const currentWeek = useVocabularyStore((s) => s.currentWeek)
+  const { curriculumLevel } = useVocabularyStore()
   const vocabCtx = useMemo(
-    () => getVocabularyContext(cycleStartDate, curriculumLevel),
-    [cycleStartDate, curriculumLevel],
+    () => getVocabularyContext(currentWeek, curriculumLevel),
+    [currentWeek, curriculumLevel],
   )
   const activeConcept = usePracticeStore((s) => s.activeConcept)
 

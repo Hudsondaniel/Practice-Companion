@@ -21,7 +21,12 @@ describe('app snapshot', () => {
         practiceSchedule: createDefaultPracticeSchedule(),
       },
       transcriptions: { projects: [], activeProjectId: null, selectedSegmentId: null },
-      vocabulary: { curriculumLevel: 1 as CurriculumLevel, cycleStartDate: '2026-06-01', lastMotifClarityRating: null },
+      vocabulary: {
+        curriculumLevel: 1 as CurriculumLevel,
+        currentWeek: 1,
+        cycleStartedAt: null,
+        lastMotifClarityRating: null,
+      },
       adherence: { history: [] },
       streak: { practiceDays: [], longestStreak: 0 },
       sessionTools: {

@@ -10,10 +10,10 @@ const PILLAR_LABELS = {
 } as const
 
 export function VocabularyWeekCard({ compact = false }: { compact?: boolean }) {
-  const cycleStartDate = useVocabularyStore((s) => s.cycleStartDate)
+  const currentWeek = useVocabularyStore((s) => s.currentWeek)
   const level = useVocabularyStore((s) => s.curriculumLevel)
   const lastRating = useVocabularyStore((s) => s.lastMotifClarityRating)
-  const ctx = getVocabularyContext(cycleStartDate, level)
+  const ctx = getVocabularyContext(currentWeek, level)
 
   if (compact) {
     return (
