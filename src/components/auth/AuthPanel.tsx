@@ -3,6 +3,10 @@ import toast from 'react-hot-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  AUTH_ACCOUNT_EXISTS,
+  AUTH_CONFIRM_EMAIL,
+} from '@/lib/auth-errors'
 import { useAuthStore } from '@/stores/auth-store'
 
 interface AuthPanelProps {
@@ -53,10 +57,15 @@ export function AuthPanel({ variant = 'settings' }: AuthPanelProps) {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
-      if (message === 'CONFIRM_EMAIL_REQUIRED') {
+      if (message === AUTH_CONFIRM_EMAIL) {
         toast.success('Account created! Check your email to confirm, then sign in.')
         setMode('sign-in')
         setPassword('')
+        return
+      }
+      if (message === AUTH_ACCOUNT_EXISTS) {
+        toast.error('An account with this email already exists. Try signing in or reset your password.')
+        setMode('sign-in')
         return
       }
       toast.error(message)

@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { Session, User } from '@supabase/supabase-js'
-import { mapAuthError, mapSaveError, mapSyncError } from '@/lib/errors'
+import { mapSaveError, mapSyncError } from '@/lib/errors'
+import {
+  AUTH_ACCOUNT_EXISTS,
+  AUTH_CONFIRM_EMAIL,
+  mapAuthError as mapAuthErr,
+} from '@/lib/auth-errors'
 import { supabase } from '@/lib/supabase'
 import { loadUserDataFromCloud, pushLocalSnapshot } from '@/lib/supabase-sync/repository'
 import { resetAllStores } from '@/lib/supabase-sync/snapshot'
@@ -182,7 +187,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ syncError: null })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      const message = mapAuthError(error.message)
+      const message = mapAuthErr(error)
       set({ syncStatus: 'error', syncError: message })
       throw new Error(message)
     }
@@ -191,15 +196,24 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   signUp: async (email, password) => {
     set({ syncError: null })
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    })
     if (error) {
-      const message = mapAuthError(error.message)
+      const message = mapAuthErr(error)
       set({ syncStatus: 'error', syncError: message })
       throw new Error(message)
     }
+    // Supabase returns empty identities when email already exists (anti-enumeration).
+    if (data.user && data.user.identities?.length === 0) {
+      set({ syncStatus: 'offline' })
+      throw new Error(AUTH_ACCOUNT_EXISTS)
+    }
     if (!data.session) {
       set({ syncStatus: 'offline' })
-      throw new Error('CONFIRM_EMAIL_REQUIRED')
+      throw new Error(AUTH_CONFIRM_EMAIL)
     }
     set({ syncStatus: 'syncing', dataReady: false })
   },
@@ -209,7 +223,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       redirectTo: window.location.origin,
     })
     if (error) {
-      const message = mapAuthError(error.message)
+      const message = mapAuthErr(error)
       set({ syncError: message })
       throw new Error(message)
     }

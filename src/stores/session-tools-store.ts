@@ -1,13 +1,9 @@
 import { create } from 'zustand'
-import {
-  isMetronomeRunning,
-  setMetronomeBpm,
-  startMetronome,
-  stopMetronome,
-  type MetronomeConfig,
-  type MetronomeSound,
-  type MetronomeSubdivision,
-} from '@/lib/metronome'
+import type { MetronomeConfig, MetronomeSound, MetronomeSubdivision } from '@/lib/metronome'
+
+async function metronomeApi() {
+  return import('@/lib/metronome')
+}
 
 export interface RecordingMarker {
   time: number
@@ -115,7 +111,7 @@ export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
 
       setBpm: (bpm) => {
         set({ bpm })
-        setMetronomeBpm(bpm)
+        void metronomeApi().then((m) => m.setMetronomeBpm(bpm))
       },
 
       setMetronomeSound: (sound) => {
@@ -142,18 +138,20 @@ export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
 
       restartMetronomeIfPlaying: async () => {
         const { isMetronomePlaying } = get()
-        if (!isMetronomePlaying && !isMetronomeRunning()) return
-        await startMetronome(get().getMetronomeConfig())
+        const m = await metronomeApi()
+        if (!isMetronomePlaying && !m.isMetronomeRunning()) return
+        await m.startMetronome(get().getMetronomeConfig())
         set({ isMetronomePlaying: true })
       },
 
       toggleMetronome: async () => {
-        if (get().isMetronomePlaying || isMetronomeRunning()) {
-          stopMetronome()
+        const m = await metronomeApi()
+        if (get().isMetronomePlaying || m.isMetronomeRunning()) {
+          m.stopMetronome()
           set({ isMetronomePlaying: false })
           return
         }
-        await startMetronome(get().getMetronomeConfig())
+        await m.startMetronome(get().getMetronomeConfig())
         set({ isMetronomePlaying: true })
       },
 
@@ -263,7 +261,7 @@ export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
       },
 
       resetSession: () => {
-        stopMetronome()
+        void metronomeApi().then((m) => m.stopMetronome())
         const prev = get().recordingBlobUrl
         if (prev && !prev.startsWith('data:')) URL.revokeObjectURL(prev)
         set({
