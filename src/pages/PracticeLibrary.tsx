@@ -48,7 +48,7 @@ export function PracticeLibrary() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Practice Library</h1>
+        <h1 className="page-heading">Practice Library</h1>
         <p className="text-muted-foreground">Monthly setup, concepts, and repertoire</p>
       </div>
 

@@ -3,6 +3,9 @@ import { Toaster } from 'react-hot-toast'
 import { CloudGate } from '@/components/auth/CloudGate'
 import { DatabaseStatusBanner } from '@/components/auth/DatabaseStatusBanner'
 import { Sidebar } from './Sidebar'
+import { MobileBottomNav } from './MobileBottomNav'
+import { MobileNavDrawer } from './MobileNavDrawer'
+import { PracticeToolsFab, PracticeToolsSheet } from './PracticeToolsSheet'
 import { PracticeToolsPanel } from '@/components/practice-tools/PracticeToolsPanel'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { resolveTheme, useUIStore } from '@/stores/ui-store'
@@ -25,27 +28,33 @@ export function AppShell() {
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
         <DatabaseStatusBanner />
         {isGuidedActive ? (
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Outlet />
-        </div>
-      ) : (
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <div className="flex flex-1 overflow-hidden">
-            <main className="flex w-[60%] flex-1 flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-                <Outlet />
-              </div>
-            </main>
-            <PracticeToolsPanel />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <Outlet />
           </div>
-        </div>
-      )}
-      <Toaster
-        key={theme}
-        position={isGuidedActive ? 'top-center' : 'bottom-right'}
-        toastOptions={{ style: toastStyle() }}
-      />
+        ) : (
+          <>
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <Sidebar className="hidden lg:flex" />
+              <div className="flex min-w-0 flex-1 overflow-hidden">
+                <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-4 pb-24 scrollbar-thin sm:p-6 lg:pb-6">
+                    <Outlet />
+                  </div>
+                </main>
+                <PracticeToolsPanel className="hidden xl:flex" />
+              </div>
+            </div>
+            <MobileBottomNav />
+            <MobileNavDrawer />
+            <PracticeToolsFab />
+            <PracticeToolsSheet />
+          </>
+        )}
+        <Toaster
+          key={theme}
+          position={isGuidedActive ? 'top-center' : 'bottom-right'}
+          toastOptions={{ style: toastStyle() }}
+        />
       </div>
     </CloudGate>
   )

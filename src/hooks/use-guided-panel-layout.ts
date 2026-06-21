@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { COLLAPSED_WIDTH } from '@/components/practice/ResizablePanel'
 
-const MIN_MAIN_WIDTH = 360
-const PANEL_MIN = 180
+const MIN_MAIN_WIDTH = 280
+const PANEL_MIN = 160
 const PANEL_MAX = 480
 
 interface UseGuidedPanelLayoutOptions {

@@ -23,10 +23,9 @@ import { PhaseSidebar } from '@/components/practice/PhaseSidebar'
 import { ResizablePanel } from '@/components/practice/ResizablePanel'
 import { DailyTranscriptionCapture } from '@/components/transcription/DailyTranscriptionCapture'
 import { TranscriptionStagePanel } from '@/components/transcription/TranscriptionStagePanel'
-import { AudioToolsSwitcher } from '@/components/practice-tools/AudioToolsSwitcher'
-import { SessionNotes } from '@/components/practice-tools/SessionNotes'
-import { SessionTimer } from '@/components/practice-tools/SessionTimer'
+import { PracticeToolsContent } from '@/components/practice-tools/PracticeToolsContent'
 import { useGuidedPanelLayout } from '@/hooks/use-guided-panel-layout'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { formatTime } from '@/lib/utils'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
@@ -73,8 +72,17 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const logSkippedPhases = useAdherenceStore((s) => s.logSkippedPhases)
   const finishSession = useAdherenceStore((s) => s.finishSession)
   const markPhaseStarted = useAdherenceStore((s) => s.markPhaseStarted)
-  const { guidedLeftPanelOpen, guidedRightPanelOpen, toggleGuidedLeftPanel, toggleGuidedRightPanel, guidedLeftPanelWidth, guidedRightPanelWidth, setGuidedLeftPanelWidth, setGuidedRightPanelWidth } =
+  const { guidedLeftPanelOpen, guidedRightPanelOpen, toggleGuidedLeftPanel, toggleGuidedRightPanel, guidedLeftPanelWidth, guidedRightPanelWidth, setGuidedLeftPanelWidth, setGuidedRightPanelWidth, setGuidedLeftPanelOpen, setGuidedRightPanelOpen } =
     useUIStore()
+
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+
+  useEffect(() => {
+    if (!isDesktop) {
+      setGuidedLeftPanelOpen(false)
+      setGuidedRightPanelOpen(false)
+    }
+  }, [isDesktop, setGuidedLeftPanelOpen, setGuidedRightPanelOpen])
 
   const { leftMaxWidth, rightMaxWidth, setLeftWidthClamped, setRightWidthClamped } = useGuidedPanelLayout({
     leftOpen: guidedLeftPanelOpen,
@@ -249,8 +257,9 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
       }
 
     goToPhase(targetIndex)
+    if (!isDesktop) setGuidedLeftPanelOpen(false)
   },
-    [phaseIndex, phases, logSkippedPhases, logCurrentPhase, goToPhase],
+    [phaseIndex, phases, logSkippedPhases, logCurrentPhase, goToPhase, isDesktop, setGuidedLeftPanelOpen],
   )
 
   useEffect(() => {
@@ -353,6 +362,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
           maxWidth={leftMaxWidth}
           onWidthChange={setLeftWidthClamped}
           onToggle={toggleGuidedLeftPanel}
+          overlayTitle="Session map"
         >
           <PhaseSidebar phases={phases} phaseIndex={phaseIndex} onSelectPhase={handleNavigatePhase} />
         </ResizablePanel>
@@ -496,28 +506,27 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
           maxWidth={rightMaxWidth}
           onWidthChange={setRightWidthClamped}
           onToggle={toggleGuidedRightPanel}
+          overlayTitle="Practice tools"
         >
-          <div className="flex h-full flex-col overflow-y-auto p-4 scrollbar-thin">
-            <p className="mb-3 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Practice tools
-            </p>
-            <div className="space-y-4">
-              <SessionTimer />
-              <AudioToolsSwitcher phaseId={phase.id} phaseTitle={phase.title} />
-              <SessionNotes />
-            </div>
+          <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-sidebar/40 px-4 py-4 scrollbar-thin">
+            <PracticeToolsContent variant="panel" phaseId={phase.id} phaseTitle={phase.title} />
           </div>
         </ResizablePanel>
       </div>
 
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-4 md:px-6">
-        <Button variant="outline" onClick={() => handleNavigatePhase(phaseIndex - 1)} disabled={phaseIndex === 0}>
+      <footer className="flex shrink-0 flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:py-4 md:px-6">
+        <Button
+          variant="outline"
+          onClick={() => handleNavigatePhase(phaseIndex - 1)}
+          disabled={phaseIndex === 0}
+          className="w-full sm:w-auto"
+        >
           <ChevronLeft className="h-4 w-4" />
           Previous
         </Button>
 
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant="outline" size="sm" onClick={togglePause} className="xl:hidden">
+          <Button variant="outline" size="sm" onClick={togglePause} className="lg:hidden">
             {isPaused ? 'Resume' : 'Pause'}
           </Button>
           <Button variant="outline" size="sm" onClick={handleFinishDay}>
@@ -525,7 +534,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
           </Button>
         </div>
 
-        <Button onClick={handleCompletePhase} size="lg" className="gap-2">
+        <Button onClick={handleCompletePhase} size="lg" className="w-full gap-2 sm:w-auto">
           {phaseIndex >= totalPhases - 1 ? (
             <>
               <CheckCircle2 className="h-4 w-4" />

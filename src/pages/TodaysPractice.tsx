@@ -200,7 +200,7 @@ export function TodaysPractice() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Today&apos;s Practice</h1>
+          <h1 className="page-heading">Today&apos;s Practice</h1>
           <p className="text-muted-foreground">{BASE_SESSION_MINUTES}-minute guided session</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Vocabulary Lab lives in the sidebar —{' '}

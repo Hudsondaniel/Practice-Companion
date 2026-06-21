@@ -15,7 +15,7 @@ export function Recordings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Recordings</h1>
+        <h1 className="page-heading">Recordings</h1>
         <p className="text-muted-foreground">Clips saved from guided sessions during Recording phases</p>
       </div>
 

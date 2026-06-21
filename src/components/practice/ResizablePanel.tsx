@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 
 const COLLAPSED_WIDTH = 40
@@ -15,6 +16,7 @@ interface ResizablePanelProps {
   onToggle: () => void
   children: React.ReactNode
   className?: string
+  overlayTitle?: string
 }
 
 export function ResizablePanel({
@@ -27,7 +29,9 @@ export function ResizablePanel({
   onToggle,
   children,
   className,
+  overlayTitle,
 }: ResizablePanelProps) {
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const dragging = useRef(false)
   const handleRef = useRef<HTMLDivElement>(null)
 
@@ -38,6 +42,7 @@ export function ResizablePanel({
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (!isDesktop) return
       e.preventDefault()
       e.stopPropagation()
       dragging.current = true
@@ -67,8 +72,35 @@ export function ResizablePanel({
       handleRef.current?.addEventListener('pointerup', onUp)
       handleRef.current?.addEventListener('pointercancel', onUp)
     },
-    [width, side, onWidthChange, clampWidth],
+    [width, side, onWidthChange, clampWidth, isDesktop],
   )
+
+  if (!isDesktop) {
+    if (!open) return null
+
+    return (
+      <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={overlayTitle}>
+        <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close panel" onClick={onToggle} />
+        <aside
+          className={cn(
+            'absolute inset-y-0 flex w-[min(100%,20rem)] flex-col border-border bg-background shadow-xl',
+            side === 'left' ? 'left-0 border-r' : 'right-0 border-l',
+            className,
+          )}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {overlayTitle ?? (side === 'left' ? 'Session map' : 'Practice tools')}
+            </p>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggle} aria-label="Close panel">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        </aside>
+      </div>
+    )
+  }
 
   if (!open) {
     return (

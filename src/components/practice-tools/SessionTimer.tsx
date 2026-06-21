@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { formatTime } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { useSessionToolsStore } from '@/stores/session-tools-store'
 
@@ -7,7 +7,13 @@ function todayIso(): string {
   return new Date().toISOString().split('T')[0]!
 }
 
-export function SessionTimer() {
+export function SessionTimer({
+  size = 'md',
+  className,
+}: {
+  size?: 'md' | 'lg'
+  className?: string
+}) {
   const isGuidedActive = useGuidedSessionStore((s) => s.isActive)
   const isPausedForDay = useGuidedSessionStore((s) => s.isPausedForDay)
   const sessionDate = useGuidedSessionStore((s) => s.sessionDate)
@@ -47,9 +53,21 @@ export function SessionTimer() {
         : 'Starts with guided session'
 
   return (
-    <div className="rounded-md border border-border bg-muted/30 p-3 text-center">
+    <div
+      className={cn(
+        'rounded-xl border border-border bg-gradient-to-b from-muted/50 to-muted/20 p-4 text-center',
+        className,
+      )}
+    >
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Session Timer</div>
-      <div className="font-mono text-3xl font-bold tabular-nums text-primary">{formatTime(elapsed)}</div>
+      <div
+        className={cn(
+          'font-mono font-bold tabular-nums text-primary',
+          size === 'lg' ? 'mt-1 text-4xl' : 'text-3xl',
+        )}
+      >
+        {formatTime(elapsed)}
+      </div>
       <p className="mt-1 text-xs text-muted-foreground">{statusLabel}</p>
       {dayStartedAt && hasDaySession && (
         <p className="mt-0.5 text-[10px] text-muted-foreground">

@@ -117,7 +117,7 @@ export function PracticeMonthView() {
             <div
               key={i}
               className={cn(
-                'relative flex min-h-[52px] flex-col items-center justify-center rounded-md border p-1 text-xs',
+                'relative flex min-h-[40px] flex-col items-center justify-center rounded-md border p-0.5 text-xs sm:min-h-[52px] sm:p-1',
                 !cell.inMonth && 'border-transparent bg-transparent',
                 cell.inMonth && !cell.practiced && 'border-border bg-muted/20',
                 cell.practiced && 'border-success/40 bg-success/15',

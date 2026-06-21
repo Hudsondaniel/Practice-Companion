@@ -28,14 +28,15 @@ const NAV_ITEMS = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string }) {
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
 
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-border bg-sidebar transition-all duration-300',
+        'flex h-full shrink-0 flex-col border-r border-border bg-sidebar transition-all duration-300',
         sidebarCollapsed ? 'w-16' : 'w-56',
+        className,
       )}
     >
       <div className="flex h-14 items-center justify-between border-b border-border px-3">
