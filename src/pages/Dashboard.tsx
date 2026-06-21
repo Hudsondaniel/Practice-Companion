@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { OnboardingChecklist } from '@/components/dashboard/OnboardingChecklist'
 import { SessionAdherenceCard } from '@/components/dashboard/SessionAdherenceCard'
 import { AdherenceCoachingCard } from '@/components/dashboard/AdherenceCoachingCard'
 import { PracticeMonthView } from '@/components/dashboard/PracticeMonthView'
@@ -30,7 +31,7 @@ import { currentMonthYear } from '@/types/practice-method'
 import { getVocabularyContext } from '@/features/vocabulary-lab/rotation'
 import { VocabularyWeekCard } from '@/components/vocabulary/VocabularyWeekCard'
 import { useVocabularyStore } from '@/stores/vocabulary-store'
-import { APP_TAGLINE } from '@/lib/app-config'
+import { APP_TAGLINE, CONCEPT_STAGE_LABELS } from '@/lib/app-config'
 import { formatTime } from '@/lib/utils'
 
 export function Dashboard() {
@@ -97,6 +98,7 @@ export function Dashboard() {
       </div>
 
       <MonthRolloverBanner />
+      <OnboardingChecklist />
       <WeekContextBar />
       <VocabularyWeekCard compact />
       <p className="text-sm text-muted-foreground">
@@ -145,7 +147,9 @@ export function Dashboard() {
               <>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium">{activeConcept.label}</p>
-                  <Badge variant="warning">{activeConcept.stage}</Badge>
+                  <Badge variant="warning">
+                    {CONCEPT_STAGE_LABELS[activeConcept.stage]}
+                  </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{activeConcept.harmonicContext}</p>
                 <div className="flex flex-wrap gap-1">

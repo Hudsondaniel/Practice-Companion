@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import type { Session, User } from '@supabase/supabase-js'
+import { mapAuthError, mapSaveError, mapSyncError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
-import { pushLocalSnapshot, syncOnLogin } from '@/lib/supabase-sync/repository'
+import { loadUserDataFromCloud, pushLocalSnapshot } from '@/lib/supabase-sync/repository'
+import { resetAllStores } from '@/lib/supabase-sync/snapshot'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -16,6 +18,8 @@ interface AuthState {
   session: Session | null
   user: User | null
   loading: boolean
+  /** True after cloud data loaded successfully for the signed-in user */
+  dataReady: boolean
   syncStatus: SyncStatus
   lastSyncedAt: string | null
   syncError: string | null
@@ -24,7 +28,9 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
   syncNow: () => Promise<void>
+  reloadFromCloud: () => Promise<void>
   setSyncStatus: (status: SyncStatus, error?: string | null) => void
 }
 
@@ -58,16 +64,21 @@ function scheduleAutoSave(): void {
 async function runInitialSync(userId: string): Promise<void> {
   const { setSyncStatus } = useAuthStore.getState()
   setSyncStatus('syncing')
+  useAuthStore.setState({ dataReady: false })
   try {
-    await syncOnLogin(userId)
-    setSyncStatus('synced')
+    const updatedAt = await loadUserDataFromCloud(userId)
     useAuthStore.setState({
-      lastSyncedAt: new Date().toISOString(),
+      dataReady: true,
+      syncStatus: 'synced',
+      lastSyncedAt: updatedAt,
       syncError: null,
     })
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Sync failed'
-    setSyncStatus('error', message)
+    resetAllStores()
+    const raw = e instanceof Error ? e.message : 'Could not load practice data'
+    if (import.meta.env.DEV) console.error('[sync load]', raw)
+    const message = mapSyncError(raw)
+    useAuthStore.setState({ dataReady: false, syncStatus: 'error', syncError: message })
   }
 }
 
@@ -76,7 +87,8 @@ function startAutoSave(userId: string): void {
   for (const store of SYNC_STORES) {
     storeUnsubs.push(
       store.subscribe(() => {
-        if (useAuthStore.getState().user?.id === userId) {
+        const { user, dataReady } = useAuthStore.getState()
+        if (user?.id === userId && dataReady) {
           scheduleAutoSave()
         }
       }),
@@ -88,35 +100,35 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   session: null,
   user: null,
   loading: true,
-  syncStatus: 'idle',
+  dataReady: false,
+  syncStatus: 'offline',
   lastSyncedAt: null,
   syncError: null,
 
   setSyncStatus: (syncStatus, syncError = null) => set({ syncStatus, syncError }),
 
   initialize: () => {
-    void supabase.auth.getSession().then(({ data }) => {
-      set({
-        session: data.session,
-        user: data.session?.user ?? null,
-        loading: false,
-      })
-      if (data.session?.user) {
-        void runInitialSync(data.session.user.id)
-        startAutoSave(data.session.user.id)
-      }
-    })
+    resetAllStores()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       set({ session, user: session?.user ?? null, loading: false })
       if (session?.user) {
-        void runInitialSync(session.user.id)
-        startAutoSave(session.user.id)
+        void runInitialSync(session.user.id).then(() => {
+          if (useAuthStore.getState().dataReady) {
+            startAutoSave(session.user.id)
+          }
+        })
       } else {
         clearAutoSave()
-        set({ syncStatus: 'offline', lastSyncedAt: null, syncError: null })
+        resetAllStores()
+        set({
+          dataReady: false,
+          syncStatus: 'offline',
+          lastSyncedAt: null,
+          syncError: null,
+        })
       }
     })
 
@@ -127,40 +139,75 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signIn: async (email, password) => {
-    set({ syncStatus: 'syncing', syncError: null })
+    set({ syncStatus: 'syncing', syncError: null, dataReady: false })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      set({ syncStatus: 'error', syncError: error.message })
-      throw error
+      const message = mapAuthError(error.message)
+      set({ syncStatus: 'error', syncError: message, dataReady: false })
+      throw new Error(message)
     }
   },
 
   signUp: async (email, password) => {
-    set({ syncStatus: 'syncing', syncError: null })
+    set({ syncStatus: 'syncing', syncError: null, dataReady: false })
     const { error } = await supabase.auth.signUp({ email, password })
     if (error) {
-      set({ syncStatus: 'error', syncError: error.message })
-      throw error
+      const message = mapAuthError(error.message)
+      set({ syncStatus: 'error', syncError: message, dataReady: false })
+      throw new Error(message)
+    }
+  },
+
+  resetPassword: async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    })
+    if (error) {
+      const message = mapAuthError(error.message)
+      set({ syncError: message })
+      throw new Error(message)
     }
   },
 
   signOut: async () => {
     clearAutoSave()
+    resetAllStores()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
-    set({ syncStatus: 'offline', lastSyncedAt: null, syncError: null })
+    set({
+      dataReady: false,
+      syncStatus: 'offline',
+      lastSyncedAt: null,
+      syncError: null,
+    })
   },
 
   syncNow: async () => {
     const userId = get().user?.id
-    if (!userId) return
+    if (!userId || !get().dataReady) return
     set({ syncStatus: 'syncing', syncError: null })
     try {
       const updatedAt = await pushLocalSnapshot(userId)
       set({ syncStatus: 'synced', lastSyncedAt: updatedAt, syncError: null })
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Save failed'
+      const raw = e instanceof Error ? e.message : 'Save failed'
+      if (import.meta.env.DEV) console.error('[sync save]', raw)
+      const message = mapSaveError(raw)
       set({ syncStatus: 'error', syncError: message })
     }
   },
+
+  reloadFromCloud: async () => {
+    const userId = get().user?.id
+    if (!userId) return
+    await runInitialSync(userId)
+    if (useAuthStore.getState().dataReady) {
+      startAutoSave(userId)
+    }
+  },
 }))
+
+export function isDatabaseConnected(): boolean {
+  const { user, dataReady, syncStatus } = useAuthStore.getState()
+  return Boolean(user && dataReady && syncStatus !== 'error')
+}

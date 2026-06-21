@@ -121,7 +121,7 @@ function getBlockInstructions(
       return [
         'Mandatory sound-target review — 15-20 min of your recordings',
         'Mark forced/student-y usages with timecodes',
-        'Update Device Backlog notes and next week focus',
+        'Update concept library notes and next week focus',
       ]
     default:
       return []

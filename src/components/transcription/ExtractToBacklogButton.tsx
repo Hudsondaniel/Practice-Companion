@@ -25,13 +25,13 @@ export function ExtractToBacklogButton({ project, segment }: ExtractToBacklogBut
       tier: 'future',
       sourceRecording: `${project.artist} — ${project.title}`,
     })
-    toast.success('Added to Device Backlog (Future tier)')
+    toast.success('Added to concept library')
   }
 
   return (
     <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={handleExtract}>
       <Sparkles className="h-3 w-3" />
-      Extract to backlog
+      Add to concepts
     </Button>
   )
 }

@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { PhaseCompletionLog, SessionAdherenceSummary } from '@/types/practice-adherence'
 import { buildSessionSummary } from '@/types/practice-adherence'
 
@@ -64,9 +63,7 @@ export function computeSkipPatterns(history: SessionAdherenceSummary[]) {
     .sort((a, b) => b.skipCount - a.skipCount)
 }
 
-export const useAdherenceStore = create<AdherenceState>()(
-  persist(
-    (set, get) => ({
+export const useAdherenceStore = create<AdherenceState>()((set, get) => ({
       currentSessionId: null,
       currentSessionDate: null,
       phaseStartedAt: null,
@@ -145,6 +142,4 @@ export const useAdherenceStore = create<AdherenceState>()(
 
       getSkipPatterns: () => computeSkipPatterns(get().history),
     }),
-    { name: 'piano-mastery-adherence' },
-  ),
 )

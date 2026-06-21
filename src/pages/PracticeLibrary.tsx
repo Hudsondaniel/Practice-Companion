@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Badge } from '@/components/ui/badge'
@@ -6,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PRACTICE_BLOCKS, currentMonthYear, type BacklogTier } from '@/types/practice-method'
+import { CONCEPT_STAGE_LABELS } from '@/lib/app-config'
 import { EMPTY } from '@/lib/copy'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
@@ -17,7 +19,13 @@ import { MonthRolloverBanner } from '@/components/month/MonthRolloverBanner'
 type Tab = 'monthly' | 'tunes' | 'concepts' | 'blocks'
 
 export function PracticeLibrary() {
-  const [tab, setTab] = useState<Tab>('monthly')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const initialTab: Tab =
+    tabParam === 'monthly' || tabParam === 'tunes' || tabParam === 'concepts' || tabParam === 'blocks'
+      ? tabParam
+      : 'monthly'
+  const [tab, setTab] = useState<Tab>(initialTab)
   const {
     deviceBacklog,
     monthlyTunes,
@@ -41,7 +49,7 @@ export function PracticeLibrary() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Practice Library</h1>
-        <p className="text-muted-foreground">Monthly setup, concepts, and method reference</p>
+        <p className="text-muted-foreground">Monthly setup, concepts, and repertoire</p>
       </div>
 
       <div className="flex gap-2 border-b border-border pb-2">
@@ -157,14 +165,23 @@ function MonthlySetupForm({
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const currentConcept = deviceBacklog.find((i) => i.tier === 'current')
 
-  const [tune1, setTune1] = useState(existingPlan?.tunes[0]?.title ?? 'All The Things You Are')
-  const [tune2, setTune2] = useState(existingPlan?.tunes[1]?.title ?? 'Autumn Leaves')
-  const [tune3, setTune3] = useState(existingPlan?.tunes[2]?.title ?? 'Great Is Thy Faithfulness')
+  const [tune1, setTune1] = useState(existingPlan?.tunes[0]?.title ?? '')
+  const [tune2, setTune2] = useState(existingPlan?.tunes[1]?.title ?? '')
+  const [tune3, setTune3] = useState(existingPlan?.tunes[2]?.title ?? '')
   const [tune3Type, setTune3Type] = useState<'hymn' | 'standard'>('hymn')
-  const [keys, setKeys] = useState(existingPlan?.keyFocusCluster.join(', ') ?? 'C, Db, D')
+  const [keys, setKeys] = useState(existingPlan?.keyFocusCluster.join(', ') ?? '')
   const [dualPhase, setDualPhase] = useState<1 | 2 | 3>(existingPlan?.dualTaskPhase ?? 1)
   const [transcriptionId, setTranscriptionId] = useState(existingPlan?.transcriptionProjectId ?? '')
-  const [heroes, setHeroes] = useState(existingPlan?.heroPianists.join(', ') ?? 'Oscar Peterson, Cory Henry')
+  const [heroes, setHeroes] = useState(existingPlan?.heroPianists.join(', ') ?? '')
+
+  const fillExample = () => {
+    setTune1('All The Things You Are')
+    setTune2('Autumn Leaves')
+    setTune3('Great Is Thy Faithfulness')
+    setTune3Type('hymn')
+    setKeys('C, Db, D')
+    setHeroes('Oscar Peterson, Cory Henry')
+  }
 
   const selectedTranscription = transcriptionProjects.find((p) => p.id === transcriptionId)
 
@@ -280,6 +297,10 @@ function MonthlySetupForm({
             </select>
           </div>
 
+          <Button type="button" variant="outline" size="sm" onClick={fillExample}>
+            Use example month
+          </Button>
+
           <Button type="submit">{configured ? 'Update month plan' : 'Initialize month'}</Button>
         </form>
       </CardContent>
@@ -334,7 +355,7 @@ function ConceptsPanel({
       keys: keys.split(',').map((k) => k.trim()).filter(Boolean),
       tier,
     })
-    toast.success('Added to Device Backlog')
+    toast.success('Added to concept library')
     setLabel('')
     setDescription('')
     setHarmonic('')
@@ -363,9 +384,9 @@ function ConceptsPanel({
                 onChange={(e) => onUpdateStage(e.target.value as typeof activeConcept.stage)}
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs"
               >
-                <option value="cognitive">cognitive</option>
-                <option value="associative">associative</option>
-                <option value="automatic">automatic</option>
+                <option value="cognitive">{CONCEPT_STAGE_LABELS.cognitive}</option>
+                <option value="associative">{CONCEPT_STAGE_LABELS.associative}</option>
+                <option value="automatic">{CONCEPT_STAGE_LABELS.automatic}</option>
               </select>
               <Button
                 size="sm"
@@ -392,7 +413,7 @@ function ConceptsPanel({
       )}
 
       <div className="flex justify-between">
-        <h2 className="text-lg font-semibold">Device Backlog</h2>
+        <h2 className="text-lg font-semibold">Concept library</h2>
         <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : 'Add concept'}</Button>
       </div>
 
@@ -416,6 +437,13 @@ function ConceptsPanel({
       )}
 
       <div className="space-y-2">
+        {backlog.length === 0 && !showForm && (
+          <Card>
+            <CardContent className="py-6 text-center text-sm text-muted-foreground">
+              No concepts yet. Add one harmonic device to drill in your guided sessions.
+            </CardContent>
+          </Card>
+        )}
         {backlog.map((item) => (
           <Card key={item.id}>
             <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">

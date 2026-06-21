@@ -1,7 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { GuidedPhase, GuidedStep } from '@/types/practice-method'
-import { normalizeSteps } from '@/lib/normalize-steps'
+import type { GuidedPhase } from '@/types/practice-method'
 
 interface GuidedSessionState {
   isActive: boolean
@@ -67,16 +65,7 @@ function segmentElapsedSeconds(segmentStartedAt: string | null): number {
   return Math.floor((Date.now() - new Date(segmentStartedAt).getTime()) / 1000)
 }
 
-function normalizePhases(phases: GuidedPhase[]): GuidedPhase[] {
-  return phases.map((p) => ({
-    ...p,
-    steps: normalizeSteps(p.steps as (GuidedStep | string)[]),
-  }))
-}
-
-export const useGuidedSessionStore = create<GuidedSessionState>()(
-  persist(
-    (set, get) => ({
+export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => ({
       isActive: false,
       isPausedForDay: false,
       dayCompleted: false,
@@ -299,45 +288,4 @@ export const useGuidedSessionStore = create<GuidedSessionState>()(
           .map((k) => Number(k.slice(prefix.length)))
       },
     }),
-    {
-      name: 'piano-mastery-guided-session',
-      partialize: (s) => ({
-        isActive: s.isActive,
-        isPausedForDay: s.isPausedForDay,
-        dayCompleted: s.dayCompleted,
-        sessionDate: s.sessionDate,
-        phases: s.phases,
-        phaseIndex: s.phaseIndex,
-        phaseEndsAt: s.phaseEndsAt,
-        isPaused: s.isPaused,
-        pausedRemainingSeconds: s.pausedRemainingSeconds,
-        startedAt: s.startedAt,
-        accumulatedSeconds: s.accumulatedSeconds,
-        segmentStartedAt: s.segmentStartedAt,
-        lastPeakBpm: s.lastPeakBpm,
-        completedStepKeys: s.completedStepKeys,
-      }),
-      onRehydrateStorage: () => (state) => {
-        if (!state) return
-        if (state.phases.length > 0) {
-          state.phases = normalizePhases(state.phases)
-        }
-        if (state.accumulatedSeconds == null) state.accumulatedSeconds = 0
-        if (state.isPausedForDay && state.startedAt && !state.segmentStartedAt && state.accumulatedSeconds === 0) {
-          state.accumulatedSeconds = segmentElapsedSeconds(state.startedAt)
-        }
-        if (state.isActive && state.startedAt && !state.segmentStartedAt) {
-          state.segmentStartedAt = state.startedAt
-        }
-        if (state.sessionDate && state.sessionDate !== todayIso()) {
-          state.endSession()
-          state.dayCompleted = false
-        }
-        if (state.dayCompleted == null) state.dayCompleted = false
-        if (state.dayCompleted && state.sessionDate !== todayIso()) {
-          state.dayCompleted = false
-        }
-      },
-    },
-  ),
 )

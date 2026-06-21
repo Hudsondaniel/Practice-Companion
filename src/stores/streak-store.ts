@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
 interface StreakState {
   /** ISO dates YYYY-MM-DD when user completed meaningful practice */
@@ -48,9 +47,7 @@ function computeLongest(sortedDays: string[]): number {
   return best
 }
 
-export const useStreakStore = create<StreakState>()(
-  persist(
-    (set, get) => ({
+export const useStreakStore = create<StreakState>()((set, get) => ({
       practiceDays: [],
       longestStreak: 0,
 
@@ -85,6 +82,4 @@ export const useStreakStore = create<StreakState>()(
         return result
       },
     }),
-    { name: 'piano-mastery-streak' },
-  ),
 )

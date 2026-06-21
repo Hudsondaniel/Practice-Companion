@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { to: '/library', label: 'Practice Library', icon: BookOpen },
   { to: '/transcriptions', label: 'Transcriptions', icon: FileMusic },
   { to: '/recordings', label: 'Recordings', icon: Mic },
-  { to: '/analytics', label: 'Progress Analytics', icon: BarChart3 },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
 

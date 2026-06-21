@@ -1,5 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { CloudGate } from '@/components/auth/CloudGate'
+import { DatabaseStatusBanner } from '@/components/auth/DatabaseStatusBanner'
 import { Sidebar } from './Sidebar'
 import { PracticeToolsPanel } from '@/components/practice-tools/PracticeToolsPanel'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
@@ -19,8 +21,10 @@ export function AppShell() {
   const theme = useUIStore((s) => s.theme)
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      {isGuidedActive ? (
+    <CloudGate>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+        <DatabaseStatusBanner />
+        {isGuidedActive ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           <Outlet />
         </div>
@@ -42,6 +46,7 @@ export function AppShell() {
         position={isGuidedActive ? 'top-center' : 'bottom-right'}
         toastOptions={{ style: toastStyle() }}
       />
-    </div>
+      </div>
+    </CloudGate>
   )
 }

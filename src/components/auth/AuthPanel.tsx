@@ -4,43 +4,56 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/stores/auth-store'
-import { isSupabaseConfigured } from '@/lib/supabase'
 
-export function AuthPanel() {
+interface AuthPanelProps {
+  /** gate = full-screen login; settings = account section only */
+  variant?: 'gate' | 'settings'
+}
+
+type FormMode = 'sign-in' | 'sign-up' | 'forgot-password'
+
+export function AuthPanel({ variant = 'settings' }: AuthPanelProps) {
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
   const syncStatus = useAuthStore((s) => s.syncStatus)
   const lastSyncedAt = useAuthStore((s) => s.lastSyncedAt)
-  const syncError = useAuthStore((s) => s.syncError)
+  const dataReady = useAuthStore((s) => s.dataReady)
   const signIn = useAuthStore((s) => s.signIn)
   const signUp = useAuthStore((s) => s.signUp)
   const signOut = useAuthStore((s) => s.signOut)
-  const syncNow = useAuthStore((s) => s.syncNow)
+  const resetPassword = useAuthStore((s) => s.resetPassword)
 
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
+  const [mode, setMode] = useState<FormMode>('sign-in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (!isSupabaseConfigured) return null
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim() || password.length < 6) {
-      toast.error('Use a valid email and password (6+ characters)')
+    if (!email.trim()) {
+      toast.error('Enter your email address')
+      return
+    }
+    if (mode !== 'forgot-password' && password.length < 6) {
+      toast.error('Password must be at least 6 characters')
       return
     }
     setSubmitting(true)
     try {
       if (mode === 'sign-in') {
         await signIn(email.trim(), password)
-        toast.success('Signed in — syncing your practice data')
-      } else {
+        toast.success('Welcome back')
+      } else if (mode === 'sign-up') {
         await signUp(email.trim(), password)
-        toast.success('Account created — check email if confirmation is required')
+        toast.success('Account created — check your email if confirmation is required')
+      } else {
+        await resetPassword(email.trim())
+        toast.success('Check your email for a reset link')
+        setMode('sign-in')
       }
-    } catch {
-      toast.error(syncError ?? 'Authentication failed')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }
@@ -55,18 +68,18 @@ export function AuthPanel() {
       error: 'warning',
       offline: 'outline',
     } as const
-    return (
-      <Badge variant={variants[syncStatus]}>
-        {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'synced' ? 'Synced' : syncStatus}
-      </Badge>
-    )
+    let label = 'Synced'
+    if (!dataReady && syncStatus === 'error') label = 'Not synced'
+    else if (syncStatus === 'syncing') label = 'Saving…'
+    else if (syncStatus === 'error') label = 'Not synced'
+    return <Badge variant={variants[syncStatus]}>{label}</Badge>
   }
 
-  if (loading) {
+  if (loading && variant === 'settings') {
     return <p className="text-sm text-muted-foreground">Checking sign-in status…</p>
   }
 
-  if (user) {
+  if (user && variant === 'settings') {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -74,40 +87,39 @@ export function AuthPanel() {
           <span className="text-sm font-medium">{user.email}</span>
           {syncBadge()}
         </div>
-        {lastSyncedAt && (
+        {lastSyncedAt && dataReady && syncStatus === 'synced' && (
           <p className="text-xs text-muted-foreground">
-            Last saved to cloud: {new Date(lastSyncedAt).toLocaleString()}
+            Last saved: {new Date(lastSyncedAt).toLocaleString()}
           </p>
         )}
-        {syncError && <p className="text-xs text-warning">{syncError}</p>}
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => void syncNow()}>
-            Sync now
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void signOut()
-              toast('Signed out — local data remains on this device')
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            void signOut()
+            toast('Signed out')
+          }}
+        >
+          Sign out
+        </Button>
         <p className="text-xs text-muted-foreground">
-          Changes auto-save to Supabase every few seconds while signed in. Audio recordings stay
-          on this device for now.
+          Your practice data saves automatically while you&apos;re signed in.
         </p>
       </div>
     )
   }
 
+  if (user && variant === 'gate') {
+    return null
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Sign in to sync concepts, monthly plans, transcriptions, and session history across devices.
-      </p>
+      {mode === 'forgot-password' && (
+        <p className="text-sm text-muted-foreground">
+          Enter your email and we&apos;ll send you a link to reset your password.
+        </p>
+      )}
       <Input
         type="email"
         placeholder="Email"
@@ -115,25 +127,45 @@ export function AuthPanel() {
         onChange={(e) => setEmail(e.target.value)}
         autoComplete="email"
       />
-      <Input
-        type="password"
-        placeholder="Password (6+ characters)"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-      />
+      {mode !== 'forgot-password' && (
+        <Input
+          type="password"
+          placeholder="Password (6+ characters)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+        />
+      )}
+      <Button type="submit" size="sm" disabled={submitting} className={variant === 'gate' ? 'w-full' : ''}>
+        {submitting
+          ? 'Please wait…'
+          : mode === 'sign-in'
+            ? 'Sign in'
+            : mode === 'sign-up'
+              ? 'Create account'
+              : 'Send reset link'}
+      </Button>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={submitting}>
-          {submitting ? 'Please wait…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
-        >
-          {mode === 'sign-in' ? 'Need an account?' : 'Already have an account?'}
-        </Button>
+        {mode === 'sign-in' && (
+          <>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setMode('sign-up')}>
+              Need an account?
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setMode('forgot-password')}>
+              Forgot password?
+            </Button>
+          </>
+        )}
+        {mode === 'sign-up' && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setMode('sign-in')}>
+            Already have an account?
+          </Button>
+        )}
+        {mode === 'forgot-password' && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setMode('sign-in')}>
+            Back to sign in
+          </Button>
+        )}
       </div>
     </form>
   )

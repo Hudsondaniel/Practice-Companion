@@ -4,6 +4,7 @@ import {
   type AppSnapshot,
   isAppSnapshot,
 } from '@/types/app-snapshot'
+import { defaultCycleStartDate } from '@/features/vocabulary-lab/rotation'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -19,7 +20,52 @@ function getDayTypeFromDateLocal(): 'identity' | 'expansion' | 'review' {
   return 'expansion'
 }
 
-/** Collect current client state for cloud sync (excludes large audio blobs). */
+function todayIso(): string {
+  return new Date().toISOString().split('T')[0]!
+}
+
+/** Empty practice state — new accounts start here; nothing is kept in localStorage. */
+export function createEmptyAppSnapshot(): AppSnapshot {
+  return {
+    version: APP_SNAPSHOT_VERSION,
+    practice: {
+      activeConcept: null,
+      deviceBacklog: [],
+      monthlyTunes: [],
+      monthlyPlan: null,
+      archivedMonthlyPlans: [],
+      todaySession: null,
+      currentBlockId: null,
+      streak: 0,
+      weeklyHours: 0,
+    },
+    transcriptions: {
+      projects: [],
+      activeProjectId: null,
+      selectedSegmentId: null,
+    },
+    vocabulary: {
+      curriculumLevel: 1,
+      cycleStartDate: defaultCycleStartDate(),
+      lastMotifClarityRating: null,
+    },
+    adherence: { history: [] },
+    streak: { practiceDays: [], longestStreak: 0 },
+    sessionTools: {
+      sessionNotes: '',
+      bpm: 120,
+      metronomeSound: 'click',
+      beatsPerMeasure: 4,
+      subdivision: 'quarter',
+      metronomeVolume: -12,
+      countInBars: 0,
+      lastSessionDurationSeconds: null,
+    },
+    guidedSession: null,
+  }
+}
+
+/** Collect in-memory state for cloud save (excludes audio blobs). */
 export function collectAppSnapshot(): AppSnapshot {
   const practice = usePracticeStore.getState()
   const transcriptions = useTranscriptionStore.getState()
@@ -87,7 +133,18 @@ export function collectAppSnapshot(): AppSnapshot {
   }
 }
 
-/** Apply cloud snapshot to all stores. */
+function normalizeGuidedAfterCloudLoad(): void {
+  const state = useGuidedSessionStore.getState()
+  if (state.sessionDate && state.sessionDate !== todayIso()) {
+    state.endSession()
+    useGuidedSessionStore.setState({ dayCompleted: false })
+  }
+  if (state.dayCompleted && state.sessionDate !== todayIso()) {
+    useGuidedSessionStore.setState({ dayCompleted: false })
+  }
+}
+
+/** Apply cloud snapshot to in-memory stores. */
 export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
   usePracticeStore.setState({
     activeConcept: snapshot.practice.activeConcept,
@@ -149,7 +206,15 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
       lastPeakBpm: null,
       completedStepKeys: g.completedStepKeys,
     })
+  } else {
+    useGuidedSessionStore.getState().endSession()
   }
+
+  normalizeGuidedAfterCloudLoad()
+}
+
+export function resetAllStores(): void {
+  hydrateAppSnapshot(createEmptyAppSnapshot())
 }
 
 export function snapshotIsEmpty(snapshot: AppSnapshot): boolean {
@@ -167,5 +232,4 @@ export function parseAppSnapshot(raw: unknown): AppSnapshot | null {
   return raw
 }
 
-// Re-export for tests — avoid duplicate day type helper in production path
 export { getDayTypeFromDateLocal as getDayTypeFromDate }

@@ -174,7 +174,7 @@ export function TodaysPractice() {
         <div>
           <h1 className="text-3xl font-bold">Today&apos;s Practice</h1>
           <p className="text-muted-foreground">
-            {BASE_SESSION_MINUTES}-minute guided session · Practice Method v2.0.0
+            {BASE_SESSION_MINUTES}-minute guided session
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Vocabulary Lab lives in the sidebar —{' '}

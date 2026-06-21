@@ -332,7 +332,7 @@ export function buildRecordingReviewSteps(): GuidedStep[] {
     ),
     step(
       'Update backlog',
-      'Update Device Backlog notes in Practice Library + next week key focus based on what you heard.',
+        'Update concept library notes in Practice Library + next week key focus based on what you heard.',
     ),
   ]
 }

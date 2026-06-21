@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import {
   isMetronomeRunning,
   setMetronomeBpm,
@@ -82,9 +81,7 @@ function clipId() {
   return `clip-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-export const useSessionToolsStore = create<SessionToolsState>()(
-  persist(
-    (set, get) => ({
+export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
       bpm: 120,
       metronomeSound: 'click',
       beatsPerMeasure: 4,
@@ -281,27 +278,6 @@ export const useSessionToolsStore = create<SessionToolsState>()(
         })
       },
     }),
-    {
-      name: 'piano-mastery-session-tools',
-      partialize: (s) => ({
-        bpm: s.bpm,
-        metronomeSound: s.metronomeSound,
-        beatsPerMeasure: s.beatsPerMeasure,
-        subdivision: s.subdivision,
-        metronomeVolume: s.metronomeVolume,
-        countInBars: s.countInBars,
-        recordingQuality: s.recordingQuality,
-        lastSessionDurationSeconds: s.lastSessionDurationSeconds,
-        sessionNotes: s.sessionNotes,
-        waveformPeaks: s.waveformPeaks,
-        recordingBase64: s.recordingBase64,
-        savedClips: s.savedClips,
-      }),
-      onRehydrateStorage: () => (state) => {
-        state?.restoreRecordingFromBase64()
-      },
-    },
-  ),
 )
 
 export function downloadRecording(base64: string, filename: string) {

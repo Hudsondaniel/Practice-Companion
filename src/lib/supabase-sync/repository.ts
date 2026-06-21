@@ -1,6 +1,8 @@
+import { mapSyncError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 import {
   collectAppSnapshot,
+  createEmptyAppSnapshot,
   hydrateAppSnapshot,
   parseAppSnapshot,
   snapshotIsEmpty,
@@ -25,7 +27,7 @@ export async function loadCloudSnapshot(userId: string): Promise<CloudSnapshotRo
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(mapSyncError(error.message))
   const row = data as SnapshotDbRow | null
   if (!row) return null
 
@@ -48,25 +50,22 @@ export async function saveCloudSnapshot(userId: string, snapshot: AppSnapshot): 
     }
   ).upsert([row])
 
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(mapSyncError(error.message))
   return updated_at
 }
 
-/** Pull cloud data into stores, or push local data if cloud is empty. */
-export async function syncOnLogin(userId: string): Promise<'pulled' | 'pushed'> {
-  const local = collectAppSnapshot()
+/** Load practice data from Supabase only — no local fallback. */
+export async function loadUserDataFromCloud(userId: string): Promise<string> {
   const cloud = await loadCloudSnapshot(userId)
 
-  if (!cloud || snapshotIsEmpty(cloud.snapshot)) {
-    if (!snapshotIsEmpty(local)) {
-      await saveCloudSnapshot(userId, local)
-      return 'pushed'
-    }
-    return 'pulled'
+  if (cloud && !snapshotIsEmpty(cloud.snapshot)) {
+    hydrateAppSnapshot(cloud.snapshot)
+    return cloud.updated_at
   }
 
-  hydrateAppSnapshot(cloud.snapshot)
-  return 'pulled'
+  const empty = createEmptyAppSnapshot()
+  hydrateAppSnapshot(empty)
+  return saveCloudSnapshot(userId, empty)
 }
 
 export async function pushLocalSnapshot(userId: string): Promise<string> {
@@ -74,6 +73,5 @@ export async function pushLocalSnapshot(userId: string): Promise<string> {
 }
 
 export async function pullCloudSnapshot(userId: string): Promise<void> {
-  const cloud = await loadCloudSnapshot(userId)
-  if (cloud) hydrateAppSnapshot(cloud.snapshot)
+  await loadUserDataFromCloud(userId)
 }

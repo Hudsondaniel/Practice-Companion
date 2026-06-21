@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { parseRecordingUrl } from '@/lib/recording-url'
 import { currentMonthYear } from '@/types/practice-method'
 import type {
@@ -35,9 +34,7 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export const useTranscriptionStore = create<TranscriptionState>()(
-  persist(
-    (set, get) => ({
+export const useTranscriptionStore = create<TranscriptionState>()((set, get) => ({
       projects: [],
       activeProjectId: null,
       selectedSegmentId: null,
@@ -167,6 +164,4 @@ export const useTranscriptionStore = create<TranscriptionState>()(
           selectedSegmentId: null,
         })),
     }),
-    { name: 'piano-mastery-transcriptions' },
-  ),
 )

@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type {
   ActiveConcept,
   ConceptStage,
@@ -54,91 +53,6 @@ interface PracticeState {
   setDailyLog: (stage: ConceptStage, tomorrowFocus: string) => void
 }
 
-const DEFAULT_CONCEPT: ActiveConcept = {
-  id: 'concept-1',
-  label: 'Peterson enclosure into 3rd of V7',
-  description: 'Oscar Peterson chromatic enclosure into the 3rd of V7 in ii–V–I',
-  harmonicContext: 'Over V7 in ii–V–I to C',
-  keys: ['C', 'F', 'Bb'],
-  sourceRecordings: ['Oscar Peterson — C Jam Blues', 'Oscar Peterson — Night Train'],
-  keyFocusCluster: ['C', 'Db', 'D'],
-  dualTaskPhase: 1,
-  stage: 'associative',
-  consecutivePassDays: 1,
-  startedAt: new Date().toISOString(),
-  ecosystem: 'bebop-language',
-}
-
-const DEFAULT_BACKLOG: DeviceBacklogItem[] = [
-  {
-    id: 'bl-1',
-    label: 'Peterson enclosure into 3rd of V7 in ii–V–I',
-    description: 'Chromatic approach enclosing the 3rd of the dominant',
-    harmonicContext: 'V7 in ii–V–I',
-    keys: ['C', 'F', 'Bb'],
-    tier: 'current',
-    sourceRecording: 'Oscar Peterson — C Jam Blues',
-    ecosystem: 'bebop-language',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bl-2',
-    label: 'Barry Harris V movement (6th-diminished)',
-    description: 'Dominant movement for V → I using 6th-diminished scale',
-    harmonicContext: 'V7 → I in ii–V–I',
-    keys: ['C', 'F'],
-    tier: 'next',
-    sourceRecording: 'Barry Harris workshop',
-    ecosystem: 'barry-harris',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'bl-3',
-    label: 'IV/V gospel move',
-    description: 'F major over G7 resolving to C — 2 voicing shapes',
-    harmonicContext: 'IV over V in gospel cadence',
-    keys: ['F', 'Bb'],
-    tier: 'future',
-    ecosystem: 'gospel-harmony',
-    createdAt: new Date().toISOString(),
-  },
-]
-
-const DEFAULT_TUNES: MonthlyTune[] = [
-  {
-    id: 'tune-1',
-    title: 'All The Things You Are',
-    type: 'standard',
-    key: 'Ab',
-    monthYear: '2026-06',
-    deploymentPoints: [
-      { id: 'dp-1', barRange: 'mm. 17-20', chordFunction: 'ii–V–I to Db' },
-      { id: 'dp-2', barRange: 'mm. 25-28', chordFunction: 'ii–V–I to G' },
-    ],
-  },
-  {
-    id: 'tune-2',
-    title: 'Autumn Leaves',
-    type: 'standard',
-    key: 'Gm',
-    monthYear: '2026-06',
-    deploymentPoints: [
-      { id: 'dp-3', barRange: 'mm. 7-8', chordFunction: 'ii–V–I to F' },
-      { id: 'dp-4', barRange: 'mm. 15-16', chordFunction: 'ii–V–I to Em' },
-    ],
-  },
-  {
-    id: 'tune-3',
-    title: 'Great Is Thy Faithfulness',
-    type: 'hymn',
-    key: 'F',
-    monthYear: '2026-06',
-    deploymentPoints: [
-      { id: 'dp-5', barRange: 'Verse cadence', chordFunction: 'IV–V–I' },
-    ],
-  },
-]
-
 function buildSessionBlocks(dayType: DayType): SessionBlock[] {
   return PRACTICE_BLOCKS.filter((b) => {
     if (dayType === 'review' && b.id === 'consolidation') return false
@@ -177,18 +91,16 @@ function createTodaySession(dayType: DayType, activeConceptId: string): DailyPra
   }
 }
 
-export const usePracticeStore = create<PracticeState>()(
-  persist(
-    (set, get) => ({
-      activeConcept: DEFAULT_CONCEPT,
-      deviceBacklog: DEFAULT_BACKLOG,
-      monthlyTunes: DEFAULT_TUNES,
+export const usePracticeStore = create<PracticeState>()((set, get) => ({
+      activeConcept: null,
+      deviceBacklog: [],
+      monthlyTunes: [],
       monthlyPlan: null,
       archivedMonthlyPlans: [],
       todaySession: null,
       currentBlockId: null,
-      streak: 12,
-      weeklyHours: 11.5,
+      streak: 0,
+      weeklyHours: 0,
 
       isMonthConfigured: (monthYear = currentMonthYear()) => {
         const plan = get().monthlyPlan
@@ -503,18 +415,4 @@ export const usePracticeStore = create<PracticeState>()(
             : null,
         })),
     }),
-    {
-      name: 'piano-mastery-practice',
-      onRehydrateStorage: () => (state) => {
-        if (!state) return
-        const today = todayIso()
-        if (!state.todaySession || state.todaySession.date !== today) {
-          const dayType = getDayTypeFromDate()
-          const blocks = buildSessionBlocks(dayType)
-          state.todaySession = createTodaySession(dayType, state.activeConcept?.id ?? '')
-          state.currentBlockId = blocks[0]?.blockId ?? null
-        }
-      },
-    },
-  ),
 )

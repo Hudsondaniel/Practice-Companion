@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { CurriculumLevel } from '@/features/vocabulary-lab/types'
 import { defaultCycleStartDate } from '@/features/vocabulary-lab/rotation'
 
@@ -13,17 +12,12 @@ interface VocabularyState {
   setLastMotifClarityRating: (rating: number) => void
 }
 
-export const useVocabularyStore = create<VocabularyState>()(
-  persist(
-    (set) => ({
-      curriculumLevel: 1,
-      cycleStartDate: defaultCycleStartDate(),
-      lastMotifClarityRating: null,
+export const useVocabularyStore = create<VocabularyState>()((set) => ({
+  curriculumLevel: 1,
+  cycleStartDate: defaultCycleStartDate(),
+  lastMotifClarityRating: null,
 
-      setCurriculumLevel: (level) => set({ curriculumLevel: level }),
-      setCycleStartDate: (date) => set({ cycleStartDate: date }),
-      setLastMotifClarityRating: (rating) => set({ lastMotifClarityRating: rating }),
-    }),
-    { name: 'piano-mastery-vocabulary' },
-  ),
-)
+  setCurriculumLevel: (level) => set({ curriculumLevel: level }),
+  setCycleStartDate: (date) => set({ cycleStartDate: date }),
+  setLastMotifClarityRating: (rating) => set({ lastMotifClarityRating: rating }),
+}))

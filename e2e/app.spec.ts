@@ -1,18 +1,25 @@
 import { test, expect } from '@playwright/test'
 
-test('dashboard loads with app title', async ({ page }) => {
+test('login gate shows on home', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Practice Assistant' })).toBeVisible()
+  await expect(page.getByPlaceholder('Email')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 })
 
-test('practice tools panel is always visible', async ({ page }) => {
-  await page.goto('/practice')
-  await expect(page.getByRole('heading', { name: 'Practice Tools' })).toBeVisible()
-  await expect(page.getByText('Metronome')).toBeVisible()
+test('settings route shows login gate', async ({ page }) => {
+  await page.goto('/settings')
+  await expect(page.getByPlaceholder('Email')).toBeVisible()
 })
 
-test('sidebar navigation works', async ({ page }) => {
+test('can switch to create account', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('link', { name: 'Exercises' }).click()
-  await expect(page.getByRole('heading', { name: 'Exercises' })).toBeVisible()
+  await page.getByRole('button', { name: 'Need an account?' }).click()
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible()
+})
+
+test('forgot password flow is available', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Forgot password?' }).click()
+  await expect(page.getByRole('button', { name: 'Send reset link' })).toBeVisible()
 })
