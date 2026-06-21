@@ -45,7 +45,7 @@ export function AuthPanel({ variant = 'settings' }: AuthPanelProps) {
         toast.success('Welcome back')
       } else if (mode === 'sign-up') {
         await signUp(email.trim(), password)
-        toast.success('Account created — check your email if confirmation is required')
+        toast.success('Account created — you\'re signed in')
       } else {
         await resetPassword(email.trim())
         toast.success('Check your email for a reset link')
@@ -53,6 +53,12 @@ export function AuthPanel({ variant = 'settings' }: AuthPanelProps) {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
+      if (message === 'CONFIRM_EMAIL_REQUIRED') {
+        toast.success('Account created! Check your email to confirm, then sign in.')
+        setMode('sign-in')
+        setPassword('')
+        return
+      }
       toast.error(message)
     } finally {
       setSubmitting(false)

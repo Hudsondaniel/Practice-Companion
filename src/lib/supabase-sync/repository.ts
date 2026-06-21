@@ -7,6 +7,7 @@ import {
   parseAppSnapshot,
   snapshotIsEmpty,
 } from '@/lib/supabase-sync/snapshot'
+
 import type { AppSnapshot } from '@/types/app-snapshot'
 import type { Json } from '@/types/database'
 
@@ -32,23 +33,24 @@ export async function loadCloudSnapshot(userId: string): Promise<CloudSnapshotRo
   if (!row) return null
 
   const parsed = parseAppSnapshot(row.snapshot)
-  if (!parsed) return null
+  if (parsed) {
+    return { snapshot: parsed, updated_at: row.updated_at }
+  }
 
-  return { snapshot: parsed, updated_at: row.updated_at }
+  // Signup trigger stores `{}` before first real save — treat as empty account.
+  return { snapshot: createEmptyAppSnapshot(), updated_at: row.updated_at }
 }
 
 export async function saveCloudSnapshot(userId: string, snapshot: AppSnapshot): Promise<string> {
   const updated_at = new Date().toISOString()
-  const row = {
+  const payload = {
     user_id: userId,
     snapshot: snapshot as unknown as Json,
     updated_at,
   }
-  const { error } = await (
-    supabase.from('user_app_snapshots') as unknown as {
-      upsert: (values: typeof row[]) => Promise<{ error: { message: string } | null }>
-    }
-  ).upsert([row])
+  const { error } = await supabase
+    .from('user_app_snapshots')
+    .upsert(payload as never, { onConflict: 'user_id' })
 
   if (error) throw new Error(mapSyncError(error.message))
   return updated_at
@@ -65,6 +67,12 @@ export async function loadUserDataFromCloud(userId: string): Promise<string> {
 
   const empty = createEmptyAppSnapshot()
   hydrateAppSnapshot(empty)
+
+  if (cloud) {
+    // Row exists (e.g. `{}` from signup trigger) — upgrade in place.
+    return saveCloudSnapshot(userId, empty)
+  }
+
   return saveCloudSnapshot(userId, empty)
 }
 

@@ -36,6 +36,13 @@ interface AuthState {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let storeUnsubs: (() => void)[] = []
+let syncInFlight: Promise<void> | null = null
+let syncInFlightUserId: string | null = null
+
+function deferAuthSideEffect(fn: () => void): void {
+  // Supabase auth deadlocks if you call the client from inside onAuthStateChange synchronously.
+  queueMicrotask(fn)
+}
 
 const SYNC_STORES = [
   usePracticeStore,
@@ -62,24 +69,50 @@ function scheduleAutoSave(): void {
 }
 
 async function runInitialSync(userId: string): Promise<void> {
-  const { setSyncStatus } = useAuthStore.getState()
-  setSyncStatus('syncing')
-  useAuthStore.setState({ dataReady: false })
-  try {
-    const updatedAt = await loadUserDataFromCloud(userId)
-    useAuthStore.setState({
-      dataReady: true,
-      syncStatus: 'synced',
-      lastSyncedAt: updatedAt,
-      syncError: null,
-    })
-  } catch (e) {
-    resetAllStores()
-    const raw = e instanceof Error ? e.message : 'Could not load practice data'
-    if (import.meta.env.DEV) console.error('[sync load]', raw)
-    const message = mapSyncError(raw)
-    useAuthStore.setState({ dataReady: false, syncStatus: 'error', syncError: message })
+  if (syncInFlight && syncInFlightUserId === userId) {
+    return syncInFlight
   }
+
+  syncInFlightUserId = userId
+  syncInFlight = (async () => {
+    const { setSyncStatus } = useAuthStore.getState()
+    setSyncStatus('syncing')
+    useAuthStore.setState({ dataReady: false })
+    try {
+      const updatedAt = await loadUserDataFromCloud(userId)
+      useAuthStore.setState({
+        dataReady: true,
+        syncStatus: 'synced',
+        lastSyncedAt: updatedAt,
+        syncError: null,
+      })
+    } catch (e) {
+      resetAllStores()
+      const raw = e instanceof Error ? e.message : 'Could not load practice data'
+      if (import.meta.env.DEV) console.error('[sync load]', raw)
+      const message = mapSyncError(raw)
+      useAuthStore.setState({ dataReady: false, syncStatus: 'error', syncError: message })
+    }
+  })()
+
+  try {
+    await syncInFlight
+  } finally {
+    if (syncInFlightUserId === userId) {
+      syncInFlight = null
+      syncInFlightUserId = null
+    }
+  }
+}
+
+function handleSignedInUser(userId: string): void {
+  deferAuthSideEffect(() => {
+    void runInitialSync(userId).then(() => {
+      if (useAuthStore.getState().dataReady) {
+        startAutoSave(userId)
+      }
+    })
+  })
 }
 
 function startAutoSave(userId: string): void {
@@ -110,16 +143,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initialize: () => {
     resetAllStores()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
       set({ session, user: session?.user ?? null, loading: false })
       if (session?.user) {
-        void runInitialSync(session.user.id).then(() => {
-          if (useAuthStore.getState().dataReady) {
-            startAutoSave(session.user.id)
-          }
-        })
+        handleSignedInUser(session.user.id)
+      }
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      set({ session, user: session?.user ?? null, loading: false })
+
+      if (session?.user) {
+        // INITIAL_SESSION is handled by getSession above — avoid double sync on load.
+        if (event !== 'INITIAL_SESSION') {
+          handleSignedInUser(session.user.id)
+        }
       } else {
         clearAutoSave()
         resetAllStores()
@@ -139,23 +179,29 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signIn: async (email, password) => {
-    set({ syncStatus: 'syncing', syncError: null, dataReady: false })
+    set({ syncError: null })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       const message = mapAuthError(error.message)
-      set({ syncStatus: 'error', syncError: message, dataReady: false })
+      set({ syncStatus: 'error', syncError: message })
       throw new Error(message)
     }
+    set({ syncStatus: 'syncing', dataReady: false })
   },
 
   signUp: async (email, password) => {
-    set({ syncStatus: 'syncing', syncError: null, dataReady: false })
-    const { error } = await supabase.auth.signUp({ email, password })
+    set({ syncError: null })
+    const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) {
       const message = mapAuthError(error.message)
-      set({ syncStatus: 'error', syncError: message, dataReady: false })
+      set({ syncStatus: 'error', syncError: message })
       throw new Error(message)
     }
+    if (!data.session) {
+      set({ syncStatus: 'offline' })
+      throw new Error('CONFIRM_EMAIL_REQUIRED')
+    }
+    set({ syncStatus: 'syncing', dataReady: false })
   },
 
   resetPassword: async (email) => {
