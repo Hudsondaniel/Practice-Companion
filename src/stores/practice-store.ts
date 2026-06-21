@@ -411,9 +411,19 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
       },
 
       ensureTodaySession: (dayType) => {
+        const monthReady = get().isMonthConfigured()
+        const conceptReady = Boolean(get().activeConcept)
+        const today = todayIso()
+
+        if (!monthReady || !conceptReady) {
+          if (get().todaySession?.date === today) {
+            set({ todaySession: null, currentBlockId: null })
+          }
+          return
+        }
+
         const schedule = get().practiceSchedule
         const dt = dayType ?? getDayTypeFromDate(schedule)
-        const today = todayIso()
         const session = get().todaySession
 
         if (!dt) {
