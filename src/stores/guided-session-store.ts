@@ -1,24 +1,27 @@
 import { create } from 'zustand'
 import type { GuidedPhase } from '@/types/practice-method'
+import { useStreakStore } from '@/stores/streak-store'
 
 interface GuidedSessionState {
   isActive: boolean
   isPausedForDay: boolean
-  /** True when user explicitly finished for the day — no resume until tomorrow */
   dayCompleted: boolean
   sessionDate: string | null
   phases: GuidedPhase[]
   phaseIndex: number
-  phaseEndsAt: number | null
   isPaused: boolean
   pausedRemainingSeconds: number
+  /** When running: wall-clock anchor for phase countdown */
+  phaseRunStartedAt: number | null
+  phaseRunBudgetSeconds: number
   startedAt: string | null
-  /** Seconds accumulated before current pause */
   accumulatedSeconds: number
-  /** When the current active segment started (null while paused for the day) */
   segmentStartedAt: string | null
   lastPeakBpm: number | null
   completedStepKeys: string[]
+  /** Manual step override within current phase (null = follow timer) */
+  manualStepIndex: number | null
+  frozenByBackground: boolean
 
   startSession: (phases: GuidedPhase[], options?: { fresh?: boolean }) => void
   resumeSession: () => void
@@ -35,21 +38,19 @@ interface GuidedSessionState {
   setLastPeakBpm: (bpm: number) => void
   toggleStepComplete: (phaseId: string, stepIndex: number) => void
   getCompletedStepsForPhase: (phaseId: string) => number[]
+  setManualStepIndex: (index: number | null) => void
+  goToStep: (stepIndex: number) => void
+  nextStep: () => void
+  previousStep: () => void
+  freezeForBackground: () => void
+  reconcileAfterBackground: () => void
   canResumeToday: () => boolean
   getDailyElapsedSeconds: () => number
+  hasRecoverableSession: () => boolean
 }
 
 function phaseDurationSeconds(phase: GuidedPhase | undefined): number {
   return (phase?.durationMinutes ?? 0) * 60
-}
-
-function startPhaseTimer(phase: GuidedPhase | undefined): {
-  phaseEndsAt: number | null
-  pausedRemainingSeconds: number
-} {
-  const duration = phaseDurationSeconds(phase)
-  if (duration <= 0) return { phaseEndsAt: null, pausedRemainingSeconds: 0 }
-  return { phaseEndsAt: Date.now() + duration * 1000, pausedRemainingSeconds: duration }
 }
 
 function todayIso(): string {
@@ -65,227 +66,328 @@ function segmentElapsedSeconds(segmentStartedAt: string | null): number {
   return Math.floor((Date.now() - new Date(segmentStartedAt).getTime()) / 1000)
 }
 
+function logPracticeDayIfNeeded(): void {
+  useStreakStore.getState().recordPracticeDay(todayIso())
+}
+
+function beginPhaseRun(remainingSeconds: number): {
+  phaseRunStartedAt: number | null
+  phaseRunBudgetSeconds: number
+  pausedRemainingSeconds: number
+  isPaused: boolean
+} {
+  if (remainingSeconds <= 0) {
+    return {
+      phaseRunStartedAt: null,
+      phaseRunBudgetSeconds: 0,
+      pausedRemainingSeconds: 0,
+      isPaused: true,
+    }
+  }
+  return {
+    phaseRunStartedAt: Date.now(),
+    phaseRunBudgetSeconds: remainingSeconds,
+    pausedRemainingSeconds: 0,
+    isPaused: false,
+  }
+}
+
 export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => ({
+  isActive: false,
+  isPausedForDay: false,
+  dayCompleted: false,
+  sessionDate: null,
+  phases: [],
+  phaseIndex: 0,
+  isPaused: false,
+  pausedRemainingSeconds: 0,
+  phaseRunStartedAt: null,
+  phaseRunBudgetSeconds: 0,
+  startedAt: null,
+  accumulatedSeconds: 0,
+  segmentStartedAt: null,
+  lastPeakBpm: null,
+  completedStepKeys: [],
+  manualStepIndex: null,
+  frozenByBackground: false,
+
+  startSession: (phases, options) => {
+    const today = todayIso()
+    const state = get()
+
+    if (!options?.fresh && state.canResumeToday()) {
+      get().resumeSession()
+      return
+    }
+
+    const duration = phaseDurationSeconds(phases[0])
+    const run = beginPhaseRun(duration)
+    const now = new Date().toISOString()
+    set({
+      isActive: true,
+      isPausedForDay: false,
+      dayCompleted: false,
+      sessionDate: today,
+      phases,
+      phaseIndex: 0,
+      ...run,
+      startedAt: now,
+      accumulatedSeconds: 0,
+      segmentStartedAt: now,
+      completedStepKeys: [],
+      manualStepIndex: null,
+      frozenByBackground: false,
+    })
+    logPracticeDayIfNeeded()
+  },
+
+  resumeSession: () => {
+    const { phases, phaseIndex, isPaused, pausedRemainingSeconds } = get()
+    if (phases.length === 0) return
+
+    const remaining =
+      isPaused && pausedRemainingSeconds > 0
+        ? pausedRemainingSeconds
+        : phaseDurationSeconds(phases[phaseIndex])
+    const run = beginPhaseRun(remaining)
+
+    set({
+      isActive: true,
+      isPausedForDay: false,
+      sessionDate: todayIso(),
+      segmentStartedAt: new Date().toISOString(),
+      manualStepIndex: null,
+      frozenByBackground: false,
+      ...run,
+    })
+    logPracticeDayIfNeeded()
+  },
+
+  pauseSession: () => {
+    const { isPaused, accumulatedSeconds, segmentStartedAt } = get()
+    const remaining = get().getSecondsRemaining()
+    if (!isPaused && get().phaseRunStartedAt) {
+      set({
+        isPaused: true,
+        phaseRunStartedAt: null,
+        pausedRemainingSeconds: remaining,
+        phaseRunBudgetSeconds: remaining,
+      })
+    }
+    set({
+      isActive: false,
+      isPausedForDay: true,
+      accumulatedSeconds: accumulatedSeconds + segmentElapsedSeconds(segmentStartedAt),
+      segmentStartedAt: null,
+      frozenByBackground: false,
+    })
+    if (get().getDailyElapsedSeconds() > 0) {
+      logPracticeDayIfNeeded()
+    }
+  },
+
+  endSession: () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {})
+    }
+    set({
       isActive: false,
       isPausedForDay: false,
       dayCompleted: false,
       sessionDate: null,
       phases: [],
       phaseIndex: 0,
-      phaseEndsAt: null,
       isPaused: false,
       pausedRemainingSeconds: 0,
+      phaseRunStartedAt: null,
+      phaseRunBudgetSeconds: 0,
       startedAt: null,
       accumulatedSeconds: 0,
       segmentStartedAt: null,
-      lastPeakBpm: null,
       completedStepKeys: [],
+      manualStepIndex: null,
+      frozenByBackground: false,
+    })
+  },
 
-      startSession: (phases, options) => {
-        const today = todayIso()
-        const state = get()
+  finishDaySession: () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {})
+    }
+    const { accumulatedSeconds, segmentStartedAt, isActive } = get()
+    const total =
+      accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0)
+    set({
+      isActive: false,
+      isPausedForDay: false,
+      dayCompleted: true,
+      sessionDate: todayIso(),
+      phases: [],
+      phaseIndex: 0,
+      isPaused: false,
+      pausedRemainingSeconds: 0,
+      phaseRunStartedAt: null,
+      phaseRunBudgetSeconds: 0,
+      startedAt: null,
+      accumulatedSeconds: total,
+      segmentStartedAt: null,
+      completedStepKeys: [],
+      manualStepIndex: null,
+      frozenByBackground: false,
+    })
+    logPracticeDayIfNeeded()
+  },
 
-        if (!options?.fresh && state.canResumeToday()) {
-          get().resumeSession()
-          return
-        }
+  isDayCompleteForToday: () => {
+    const { dayCompleted, sessionDate } = get()
+    return dayCompleted && sessionDate === todayIso()
+  },
 
-        const timer = startPhaseTimer(phases[0])
-        const now = new Date().toISOString()
-        set({
-          isActive: true,
-          isPausedForDay: false,
-          dayCompleted: false,
-          sessionDate: today,
-          phases,
-          phaseIndex: 0,
-          ...timer,
-          isPaused: false,
-          startedAt: now,
-          accumulatedSeconds: 0,
-          segmentStartedAt: now,
-          completedStepKeys: [],
-        })
-      },
+  getDailyElapsedSeconds: () => {
+    const { accumulatedSeconds, segmentStartedAt, isActive } = get()
+    return accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0)
+  },
 
-      resumeSession: () => {
-        const { phases, phaseIndex, isPaused, pausedRemainingSeconds } = get()
-        if (phases.length === 0) return
+  canResumeToday: () => {
+    const { isPausedForDay, dayCompleted, sessionDate, phases } = get()
+    return isPausedForDay && !dayCompleted && sessionDate === todayIso() && phases.length > 0
+  },
 
-        const phase = phases[phaseIndex]
-        const timer =
-          isPaused && pausedRemainingSeconds > 0
-            ? { phaseEndsAt: null, pausedRemainingSeconds }
-            : startPhaseTimer(phase)
+  hasRecoverableSession: () => {
+    const { sessionDate, phases, dayCompleted } = get()
+    return sessionDate === todayIso() && phases.length > 0 && !dayCompleted
+  },
 
-        set({
-          isActive: true,
-          isPausedForDay: false,
-          sessionDate: todayIso(),
-          segmentStartedAt: new Date().toISOString(),
-          ...timer,
-        })
-      },
+  completeCurrentPhase: () => {
+    const { phaseIndex, phases } = get()
+    const next = phaseIndex + 1
+    if (next >= phases.length) return false
+    const run = beginPhaseRun(phaseDurationSeconds(phases[next]))
+    set({
+      phaseIndex: next,
+      manualStepIndex: null,
+      frozenByBackground: false,
+      ...run,
+    })
+    return true
+  },
 
-      pauseSession: () => {
-        const { isPaused, phaseEndsAt, pausedRemainingSeconds, accumulatedSeconds, segmentStartedAt } =
-          get()
-        let remaining = pausedRemainingSeconds
-        if (!isPaused && phaseEndsAt) {
-          remaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000))
-        }
-        set({
-          isActive: false,
-          isPausedForDay: true,
-          isPaused: true,
-          phaseEndsAt: null,
-          pausedRemainingSeconds: remaining,
-          accumulatedSeconds: accumulatedSeconds + segmentElapsedSeconds(segmentStartedAt),
-          segmentStartedAt: null,
-        })
-      },
+  goToPhase: (index) => {
+    const { phases } = get()
+    if (index < 0 || index >= phases.length) return
+    const run = beginPhaseRun(phaseDurationSeconds(phases[index]))
+    set({
+      phaseIndex: index,
+      manualStepIndex: null,
+      frozenByBackground: false,
+      ...run,
+    })
+  },
 
-      endSession: () => {
-        if (document.fullscreenElement) {
-          void document.exitFullscreen().catch(() => {})
-        }
-        set({
-          isActive: false,
-          isPausedForDay: false,
-          dayCompleted: false,
-          sessionDate: null,
-          phases: [],
-          phaseIndex: 0,
-          phaseEndsAt: null,
-          isPaused: false,
-          pausedRemainingSeconds: 0,
-          startedAt: null,
-          accumulatedSeconds: 0,
-          segmentStartedAt: null,
-          completedStepKeys: [],
-        })
-      },
+  getSecondsRemaining: () => {
+    const { isPaused, pausedRemainingSeconds, phaseRunStartedAt, phaseRunBudgetSeconds, phases, phaseIndex } =
+      get()
+    if (isPaused) return pausedRemainingSeconds
+    if (phaseRunStartedAt != null) {
+      const elapsed = Math.floor((Date.now() - phaseRunStartedAt) / 1000)
+      return Math.max(0, phaseRunBudgetSeconds - elapsed)
+    }
+    return phaseDurationSeconds(phases[phaseIndex])
+  },
 
-      finishDaySession: () => {
-        if (document.fullscreenElement) {
-          void document.exitFullscreen().catch(() => {})
-        }
-        const { accumulatedSeconds, segmentStartedAt, isActive } = get()
-        set({
-          isActive: false,
-          isPausedForDay: false,
-          dayCompleted: true,
-          sessionDate: todayIso(),
-          phases: [],
-          phaseIndex: 0,
-          phaseEndsAt: null,
-          isPaused: false,
-          pausedRemainingSeconds: 0,
-          startedAt: null,
-          accumulatedSeconds:
-            accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0),
-          segmentStartedAt: null,
-          completedStepKeys: [],
-        })
-      },
+  tickTimer: () => {},
 
-      isDayCompleteForToday: () => {
-        const { dayCompleted, sessionDate } = get()
-        return dayCompleted && sessionDate === todayIso()
-      },
+  togglePause: () => {
+    const { isPaused, pausedRemainingSeconds, phaseRunStartedAt, phaseRunBudgetSeconds } = get()
+    if (isPaused) {
+      const run = beginPhaseRun(pausedRemainingSeconds)
+      set({ ...run, frozenByBackground: false })
+    } else {
+      let remaining = pausedRemainingSeconds
+      if (phaseRunStartedAt != null) {
+        const elapsed = Math.floor((Date.now() - phaseRunStartedAt) / 1000)
+        remaining = Math.max(0, phaseRunBudgetSeconds - elapsed)
+      }
+      set({
+        isPaused: true,
+        phaseRunStartedAt: null,
+        pausedRemainingSeconds: remaining,
+        phaseRunBudgetSeconds: remaining,
+        frozenByBackground: false,
+      })
+    }
+  },
 
-      getDailyElapsedSeconds: () => {
-        const { accumulatedSeconds, segmentStartedAt, isActive } = get()
-        return accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0)
-      },
+  resetPhaseTimer: () => {
+    const { phases, phaseIndex } = get()
+    const run = beginPhaseRun(phaseDurationSeconds(phases[phaseIndex]))
+    set({ ...run, manualStepIndex: null, frozenByBackground: false })
+  },
 
-      canResumeToday: () => {
-        const { isPausedForDay, dayCompleted, sessionDate, phases } = get()
-        return (
-          isPausedForDay &&
-          !dayCompleted &&
-          sessionDate === todayIso() &&
-          phases.length > 0
-        )
-      },
+  setLastPeakBpm: (bpm) => set({ lastPeakBpm: bpm }),
 
-      completeCurrentPhase: () => {
-        const { phaseIndex, phases } = get()
-        const next = phaseIndex + 1
-        if (next >= phases.length) return false
-        const timer = startPhaseTimer(phases[next])
-        set({
-          phaseIndex: next,
-          ...timer,
-          isPaused: false,
-        })
-        return true
-      },
+  toggleStepComplete: (phaseId, stepIndex) => {
+    const key = stepKey(phaseId, stepIndex)
+    const { completedStepKeys } = get()
+    set({
+      completedStepKeys: completedStepKeys.includes(key)
+        ? completedStepKeys.filter((k) => k !== key)
+        : [...completedStepKeys, key],
+    })
+  },
 
-      goToPhase: (index) => {
-        const { phases } = get()
-        if (index < 0 || index >= phases.length) return
-        const timer = startPhaseTimer(phases[index])
-        set({
-          phaseIndex: index,
-          ...timer,
-          isPaused: false,
-        })
-      },
+  getCompletedStepsForPhase: (phaseId) => {
+    const prefix = `${phaseId}:`
+    return get()
+      .completedStepKeys.filter((k) => k.startsWith(prefix))
+      .map((k) => Number(k.slice(prefix.length)))
+  },
 
-      getSecondsRemaining: () => {
-        const { phaseEndsAt, isPaused, pausedRemainingSeconds, phases, phaseIndex } = get()
-        if (isPaused) return pausedRemainingSeconds
-        if (phaseEndsAt) return Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000))
-        return phaseDurationSeconds(phases[phaseIndex])
-      },
+  setManualStepIndex: (index) => set({ manualStepIndex: index }),
 
-      tickTimer: () => {},
+  goToStep: (stepIndex) => {
+    const phase = get().phases[get().phaseIndex]
+    if (!phase) return
+    const max = Math.max(0, phase.steps.length - 1)
+    set({ manualStepIndex: Math.min(max, Math.max(0, stepIndex)) })
+  },
 
-      togglePause: () => {
-        const { isPaused, phaseEndsAt } = get()
-        if (isPaused) {
-          const remaining = get().pausedRemainingSeconds
-          set({
-            isPaused: false,
-            phaseEndsAt: Date.now() + remaining * 1000,
-            pausedRemainingSeconds: 0,
-          })
-        } else {
-          const remaining = phaseEndsAt
-            ? Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000))
-            : get().pausedRemainingSeconds
-          set({
-            isPaused: true,
-            phaseEndsAt: null,
-            pausedRemainingSeconds: remaining,
-          })
-        }
-      },
+  nextStep: () => {
+    const { manualStepIndex, phaseIndex, phases } = get()
+    const phase = phases[phaseIndex]
+    if (!phase) return
+    const current = manualStepIndex ?? 0
+    get().goToStep(Math.min(phase.steps.length - 1, current + 1))
+  },
 
-      resetPhaseTimer: () => {
-        const { phases, phaseIndex } = get()
-        const timer = startPhaseTimer(phases[phaseIndex])
-        set({ ...timer, isPaused: false })
-      },
+  previousStep: () => {
+    const { manualStepIndex } = get()
+    const current = manualStepIndex ?? 0
+    get().goToStep(Math.max(0, current - 1))
+  },
 
-      setLastPeakBpm: (bpm) => set({ lastPeakBpm: bpm }),
+  freezeForBackground: () => {
+    const state = get()
+    if (!state.isActive || state.isPaused) return
+    const remaining = state.getSecondsRemaining()
+    const { accumulatedSeconds, segmentStartedAt } = state
+    set({
+      isPaused: true,
+      phaseRunStartedAt: null,
+      pausedRemainingSeconds: remaining,
+      phaseRunBudgetSeconds: remaining,
+      accumulatedSeconds: accumulatedSeconds + segmentElapsedSeconds(segmentStartedAt),
+      segmentStartedAt: null,
+      frozenByBackground: true,
+    })
+    if (state.getDailyElapsedSeconds() > 0) {
+      logPracticeDayIfNeeded()
+    }
+  },
 
-      toggleStepComplete: (phaseId, stepIndex) => {
-        const key = stepKey(phaseId, stepIndex)
-        const { completedStepKeys } = get()
-        set({
-          completedStepKeys: completedStepKeys.includes(key)
-            ? completedStepKeys.filter((k) => k !== key)
-            : [...completedStepKeys, key],
-        })
-      },
-
-      getCompletedStepsForPhase: (phaseId) => {
-        const prefix = `${phaseId}:`
-        return get()
-          .completedStepKeys.filter((k) => k.startsWith(prefix))
-          .map((k) => Number(k.slice(prefix.length)))
-      },
-    }),
-)
+  reconcileAfterBackground: () => {
+    const { frozenByBackground, isActive, isPaused } = get()
+    if (!isActive || !frozenByBackground || !isPaused) return
+    // Remain paused with frozen remaining — user taps Resume to continue.
+  },
+}))

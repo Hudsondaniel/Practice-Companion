@@ -33,7 +33,7 @@ BEGIN
   VALUES (NEW.id, COALESCE(NEW.email, ''))
   ON CONFLICT (id) DO NOTHING;
 
-  // Empty snapshot written by signup trigger before first real save.
+  -- Empty snapshot written by signup trigger before first real save.
   INSERT INTO public.user_app_snapshots (user_id, snapshot)
   VALUES (NEW.id, '{"version":1}'::jsonb)
   ON CONFLICT (user_id) DO NOTHING;

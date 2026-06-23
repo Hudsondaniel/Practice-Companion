@@ -7,6 +7,9 @@ import { MobileBottomNav } from './MobileBottomNav'
 import { MobileNavDrawer } from './MobileNavDrawer'
 import { PracticeToolsFab, PracticeToolsSheet } from './PracticeToolsSheet'
 import { PracticeToolsPanel } from '@/components/practice-tools/PracticeToolsPanel'
+import { GuidedSession } from '@/components/practice/GuidedSession'
+import { SessionResumeBar } from '@/components/practice/SessionResumeBar'
+import { useSessionLifecycle } from '@/hooks/use-session-lifecycle'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { resolveTheme, useUIStore } from '@/stores/ui-store'
 
@@ -22,14 +25,22 @@ function toastStyle() {
 export function AppShell() {
   const isGuidedActive = useGuidedSessionStore((s) => s.isActive)
   const theme = useUIStore((s) => s.theme)
+  useSessionLifecycle()
 
   return (
     <CloudGate>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
         <DatabaseStatusBanner />
+        <SessionResumeBar />
         {isGuidedActive ? (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <Outlet />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <Sidebar className="hidden lg:flex" />
+            <div className="flex min-w-0 flex-1 overflow-hidden">
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <GuidedSession onComplete={() => {}} />
+              </div>
+              <PracticeToolsPanel className="hidden xl:flex" />
+            </div>
           </div>
         ) : (
           <>

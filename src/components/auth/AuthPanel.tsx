@@ -118,7 +118,9 @@ export function AuthPanel({ variant = 'settings' }: AuthPanelProps) {
           Sign out
         </Button>
         <p className="text-xs text-muted-foreground">
-          Your practice data saves automatically while you&apos;re signed in.
+          Your practice data saves automatically to the <code className="text-[11px]">user_app_snapshots</code>{' '}
+          table in Supabase (one JSON row per account). Legacy tables like{' '}
+          <code className="text-[11px]">active_concepts</code> are not used by this app.
         </p>
       </div>
     )

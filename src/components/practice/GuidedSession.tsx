@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   CheckCircle2,
@@ -27,6 +27,10 @@ import { PracticeToolsContent } from '@/components/practice-tools/PracticeToolsC
 import { useGuidedPanelLayout } from '@/hooks/use-guided-panel-layout'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { formatTime } from '@/lib/utils'
+import {
+  activeStepIndexFromElapsed,
+  allocateStepDurations,
+} from '@/lib/step-timing'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -55,6 +59,11 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     pauseSession,
     finishDaySession,
     getSecondsRemaining,
+    manualStepIndex,
+    goToStep,
+    nextStep,
+    previousStep,
+    frozenByBackground,
   } = useGuidedSessionStore()
 
   const { completeBlock, setCurrentBlock, monthlyPlan } = usePracticeStore()
@@ -105,6 +114,19 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const phaseElapsed = Math.max(0, phaseDuration - secondsRemaining)
   const phaseProgress =
     phaseDuration > 0 ? ((phaseDuration - secondsRemaining) / phaseDuration) * 100 : 0
+
+  const timerStepIndex = useMemo(() => {
+    if (!phase) return 0
+    const durations = allocateStepDurations(phase.steps, phaseDuration)
+    return activeStepIndexFromElapsed(durations, phaseElapsed)
+  }, [phase, phaseDuration, phaseElapsed])
+
+  useEffect(() => {
+    if (frozenByBackground) {
+      toast('Timers paused while you were away. Tap play to continue.', { icon: '⏸️' })
+      useGuidedSessionStore.setState({ frozenByBackground: false })
+    }
+  }, [frozenByBackground])
 
   useEffect(() => {
     markPhaseStarted()
@@ -443,6 +465,17 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
                   phaseDurationSeconds={phaseDuration}
                   elapsedSeconds={phaseElapsed}
                   isPaused={isPaused}
+                  manualStepIndex={manualStepIndex}
+                  onSelectStep={(index) => goToStep(index)}
+                  onPreviousStep={() => {
+                    if (manualStepIndex == null) goToStep(Math.max(0, timerStepIndex - 1))
+                    else previousStep()
+                  }}
+                  onNextStep={() => {
+                    const max = Math.max(0, phase.steps.length - 1)
+                    if (manualStepIndex == null) goToStep(Math.min(max, timerStepIndex + 1))
+                    else nextStep()
+                  }}
                 />
               </div>
 

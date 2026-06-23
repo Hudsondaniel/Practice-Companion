@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { MonthRolloverBanner } from '@/components/month/MonthRolloverBanner'
-import { GuidedSession } from '@/components/practice/GuidedSession'
 import { generateGuidedPhases, getUniqueBlocks } from '@/features/practice-method/guided-phases'
 import { getDayType, isPracticeDay } from '@/lib/month-context'
 import {
@@ -46,7 +45,6 @@ export function TodaysPractice() {
     practiceSchedule,
   } = usePracticeStore()
 
-  const isActive = useGuidedSessionStore((s) => s.isActive)
   const isPausedForDay = useGuidedSessionStore((s) => s.isPausedForDay)
   const sessionDate = useGuidedSessionStore((s) => s.sessionDate)
   const phases = useGuidedSessionStore((s) => s.phases)
@@ -66,9 +64,13 @@ export function TodaysPractice() {
   }, [today])
 
   useEffect(() => {
+    const today = new Date().toISOString().split('T')[0]!
+    const savedType =
+      todaySession?.date === today ? todaySession.dayType : undefined
     if (dayType) ensureTodaySession(dayType)
+    else if (savedType) ensureTodaySession(savedType)
     else ensureTodaySession()
-  }, [ensureTodaySession, dayType])
+  }, [ensureTodaySession, dayType, todaySession?.date, todaySession?.dayType])
 
   const sessionZones =
     dayType === 'review'
@@ -176,16 +178,6 @@ export function TodaysPractice() {
       today,
     ],
   )
-
-  const handleSessionComplete = () => {
-    if (isDayCompleteForToday) {
-      toast.success('Session complete for today')
-    }
-  }
-
-  if (isActive) {
-    return <GuidedSession onComplete={handleSessionComplete} />
-  }
 
   const dayBadgeLabel = dayType
     ? dayType === 'review'

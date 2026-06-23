@@ -53,14 +53,20 @@ export interface SessionToolsSnapshot {
 }
 
 export interface GuidedSessionSnapshot {
+  isActive: boolean
   isPausedForDay: boolean
+  isPaused: boolean
   dayCompleted: boolean
   sessionDate: string | null
   phases: unknown[]
   phaseIndex: number
   pausedRemainingSeconds: number
+  phaseRunBudgetSeconds: number
   accumulatedSeconds: number
+  startedAt: string | null
+  segmentStartedAt: string | null
   completedStepKeys: string[]
+  manualStepIndex: number | null
 }
 
 export interface AppSnapshot {

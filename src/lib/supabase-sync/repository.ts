@@ -7,7 +7,6 @@ import {
   parseAppSnapshot,
   snapshotIsEmpty,
 } from '@/lib/supabase-sync/snapshot'
-
 import type { AppSnapshot } from '@/types/app-snapshot'
 import type { Json } from '@/types/database'
 
@@ -65,12 +64,19 @@ export async function loadUserDataFromCloud(userId: string): Promise<string> {
     return cloud.updated_at
   }
 
+  if (cloud?.snapshot) {
+    const parsed = parseAppSnapshot(cloud.snapshot)
+    if (parsed) {
+      hydrateAppSnapshot(parsed)
+      return cloud.updated_at
+    }
+  }
+
   const empty = createEmptyAppSnapshot()
   hydrateAppSnapshot(empty)
 
   if (cloud) {
-    // Row exists (e.g. `{}` from signup trigger) — upgrade in place.
-    return saveCloudSnapshot(userId, empty)
+    return saveCloudSnapshot(userId, collectAppSnapshot())
   }
 
   return saveCloudSnapshot(userId, empty)

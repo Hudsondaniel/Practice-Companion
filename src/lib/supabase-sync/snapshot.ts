@@ -76,16 +76,22 @@ export function collectAppSnapshot(): AppSnapshot {
   const guided = useGuidedSessionStore.getState()
 
   const guidedSession =
-    guided.isPausedForDay && guided.sessionDate
+    guided.sessionDate && guided.phases.length > 0
       ? {
+          isActive: guided.isActive,
           isPausedForDay: guided.isPausedForDay,
+          isPaused: guided.isPaused,
           dayCompleted: guided.dayCompleted,
           sessionDate: guided.sessionDate,
           phases: guided.phases,
           phaseIndex: guided.phaseIndex,
-          pausedRemainingSeconds: guided.pausedRemainingSeconds,
+          pausedRemainingSeconds: guided.getSecondsRemaining(),
+          phaseRunBudgetSeconds: guided.phaseRunBudgetSeconds,
           accumulatedSeconds: guided.accumulatedSeconds,
+          startedAt: guided.startedAt,
+          segmentStartedAt: guided.segmentStartedAt,
           completedStepKeys: guided.completedStepKeys,
+          manualStepIndex: guided.manualStepIndex,
         }
       : null
 
@@ -157,7 +163,13 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
     practiceSchedule: normalizePracticeSchedule(snapshot.practice.practiceSchedule),
   })
   usePracticeStore.getState().ensureTodaySession(
-    getDayTypeForDate(normalizePracticeSchedule(snapshot.practice.practiceSchedule)) ?? undefined,
+    (() => {
+      const today = todayIso()
+      const saved = snapshot.practice.todaySession
+      const schedule = normalizePracticeSchedule(snapshot.practice.practiceSchedule)
+      if (saved?.date === today) return saved.dayType
+      return getDayTypeForDate(schedule) ?? undefined
+    })(),
   )
 
   useTranscriptionStore.setState({
@@ -189,21 +201,34 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
 
   if (snapshot.guidedSession) {
     const g = snapshot.guidedSession
+    const today = todayIso()
+    const inProgress =
+      g.sessionDate === today && !g.dayCompleted && (g.phases as GuidedPhase[]).length > 0
+    const pausedForDay = g.isPausedForDay ?? !inProgress
+    const remaining =
+      typeof g.pausedRemainingSeconds === 'number'
+        ? g.pausedRemainingSeconds
+        : phaseDurationFromPhases(g.phases as GuidedPhase[], g.phaseIndex)
+    const midSession = inProgress && !pausedForDay
+
     useGuidedSessionStore.setState({
-      isActive: false,
-      isPausedForDay: g.isPausedForDay,
-      dayCompleted: g.dayCompleted,
+      isActive: midSession,
+      isPausedForDay: pausedForDay,
+      dayCompleted: g.dayCompleted ?? false,
       sessionDate: g.sessionDate,
       phases: g.phases as GuidedPhase[],
-      phaseIndex: g.phaseIndex,
-      phaseEndsAt: null,
-      isPaused: true,
-      pausedRemainingSeconds: g.pausedRemainingSeconds,
-      startedAt: null,
-      accumulatedSeconds: g.accumulatedSeconds,
-      segmentStartedAt: null,
+      phaseIndex: g.phaseIndex ?? 0,
+      isPaused: midSession ? (g.isPaused ?? true) : true,
+      pausedRemainingSeconds: remaining,
+      phaseRunStartedAt: null,
+      phaseRunBudgetSeconds: g.phaseRunBudgetSeconds ?? remaining,
+      startedAt: g.startedAt ?? null,
+      accumulatedSeconds: g.accumulatedSeconds ?? 0,
+      segmentStartedAt: midSession && !(g.isPaused ?? true) ? (g.segmentStartedAt ?? null) : null,
       lastPeakBpm: null,
-      completedStepKeys: g.completedStepKeys,
+      completedStepKeys: g.completedStepKeys ?? [],
+      manualStepIndex: g.manualStepIndex ?? null,
+      frozenByBackground: false,
     })
   } else {
     useGuidedSessionStore.getState().endSession()
@@ -216,13 +241,21 @@ export function resetAllStores(): void {
   hydrateAppSnapshot(createEmptyAppSnapshot())
 }
 
+function phaseDurationFromPhases(phases: GuidedPhase[], phaseIndex: number): number {
+  const phase = phases[phaseIndex]
+  return (phase?.durationMinutes ?? 0) * 60
+}
+
 export function snapshotIsEmpty(snapshot: AppSnapshot): boolean {
   return (
     !snapshot.practice.activeConcept &&
     snapshot.practice.deviceBacklog.length === 0 &&
     snapshot.practice.monthlyTunes.length === 0 &&
     !snapshot.practice.monthlyPlan &&
-    snapshot.transcriptions.projects.length === 0
+    snapshot.transcriptions.projects.length === 0 &&
+    snapshot.adherence.history.length === 0 &&
+    snapshot.streak.practiceDays.length === 0 &&
+    !snapshot.guidedSession
   )
 }
 

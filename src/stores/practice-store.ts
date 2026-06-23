@@ -435,6 +435,9 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
         const session = get().todaySession
 
         if (!dt) {
+          if (session?.date === today && session.dayType) {
+            return
+          }
           if (session?.date === today) {
             set({ todaySession: null, currentBlockId: null })
           }
