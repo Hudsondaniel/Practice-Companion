@@ -27,12 +27,10 @@ import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { currentMonthYear } from '@/types/practice-method'
-import { getVocabularyContext } from '@/features/vocabulary-lab/rotation'
-import { VocabularyWeekCard } from '@/components/vocabulary/VocabularyWeekCard'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
 import { APP_TAGLINE, CONCEPT_STAGE_LABELS } from '@/lib/app-config'
 import { formatTime } from '@/lib/utils'
 import { isPracticeDay } from '@/lib/month-context'
+import { getWeekOfPracticeMonth } from '@/lib/practice-week'
 
 export function Dashboard() {
   const { activeConcept, todaySession, monthlyPlan, ensureTodaySession, practiceSchedule } =
@@ -45,13 +43,6 @@ export function Dashboard() {
   const history = useAdherenceStore((s) => s.history)
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const { getDailyElapsedSeconds } = useGuidedSessionStore()
-  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
-  const currentWeek = useVocabularyStore((s) => s.currentWeek)
-  const { curriculumLevel } = useVocabularyStore()
-  const vocabCtx = useMemo(
-    () => getVocabularyContext(currentWeek, curriculumLevel),
-    [currentWeek, curriculumLevel],
-  )
 
   useEffect(() => {
     if (setupComplete) ensureTodaySession()
@@ -59,13 +50,15 @@ export function Dashboard() {
 
   const currentStreak = useMemo(() => getCurrentStreak(), [getCurrentStreak, practiceDays, practiceSchedule])
   const showStartSession = isPracticeDay()
+  const practiceWeek = getWeekOfPracticeMonth()
 
-  const weekHeroes = useMemo(() => {
+  const monthlyTranscription = useMemo(() => {
     const month = currentMonthYear()
-    return transcriptionProjects
-      .filter((p) => p.practiceDate?.startsWith(month))
-      .slice(0, 7)
-  }, [transcriptionProjects])
+    return (
+      transcriptionProjects.find((p) => p.id === monthlyPlan?.transcriptionProjectId) ??
+      transcriptionProjects.find((p) => p.monthYear === month && !p.practiceDate)
+    )
+  }, [transcriptionProjects, monthlyPlan?.transcriptionProjectId])
 
   const adherenceChart = useMemo(() => {
     return history.slice(0, 7).reverse().map((h, i) => ({
@@ -103,24 +96,13 @@ export function Dashboard() {
       {!setupComplete ? null : (
         <>
           <WeekContextBar />
-          <VocabularyWeekCard compact />
-          <p className="text-sm text-muted-foreground">
-            <Link to="/vocabulary" className="text-primary hover:underline">
-              Open Vocabulary Lab →
-            </Link>
-            {' · '}
-            Week {vocabCtx.macroWeek}/12 · {vocabCtx.module.title}
-          </p>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <StatCard label="Practice streak" value={`${currentStreak} days`} accent />
             {showStartSession && totalBlocks > 0 && (
               <StatCard label="Today's blocks" value={`${completedBlocks}/${totalBlocks}`} />
             )}
-            <StatCard label="Vocabulary week" value={`${vocabCtx.macroWeek}/12`} />
-            {lastMotifClarity != null && (
-              <StatCard label="Motif clarity" value={`${lastMotifClarity}/5`} />
-            )}
+            <StatCard label="Practice month week" value={`Week ${practiceWeek}`} />
             {getDailyElapsedSeconds() > 0 && (
               <StatCard label="Session time today" value={formatTime(getDailyElapsedSeconds())} />
             )}
@@ -172,23 +154,30 @@ export function Dashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>This month&apos;s language lines</CardTitle>
-                <CardDescription>Daily recordings from Language Acquisition</CardDescription>
+                <CardTitle>Monthly transcription</CardTitle>
+                <CardDescription>Sections you&apos;re working through this month</CardDescription>
               </CardHeader>
               <CardContent>
-                {weekHeroes.length === 0 ? (
+                {!monthlyTranscription ? (
                   <p className="text-sm text-muted-foreground">
-                    None yet. They appear when you add today&apos;s recording in guided session.
+                    Set your monthly transcription song in{' '}
+                    <Link to="/library?tab=monthly" className="text-primary hover:underline">
+                      Monthly Setup
+                    </Link>
+                    .
+                  </p>
+                ) : monthlyTranscription.segments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-medium">{monthlyTranscription.artist} — {monthlyTranscription.title}</span>
+                    <br />
+                    Add sections during guided practice.
                   </p>
                 ) : (
                   <ul className="space-y-2">
-                    {weekHeroes.map((p) => (
-                      <li key={p.id} className="flex justify-between text-sm">
-                        <span>
-                          <span className="font-medium">{p.title}</span>
-                          <span className="text-muted-foreground"> · {p.artist}</span>
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground">{p.practiceDate}</span>
+                    {monthlyTranscription.segments.slice(0, 7).map((s) => (
+                      <li key={s.id} className="flex justify-between text-sm">
+                        <span className="font-medium">{s.label}</span>
+                        <span className="text-xs capitalize text-muted-foreground">{s.status}</span>
                       </li>
                     ))}
                   </ul>

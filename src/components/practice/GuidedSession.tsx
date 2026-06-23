@@ -21,7 +21,7 @@ import { AutomaticityChecklist, ClarityRating } from '@/components/practice/Phas
 import { TimedStepRunner } from '@/components/practice/TimedStepRunner'
 import { PhaseSidebar } from '@/components/practice/PhaseSidebar'
 import { ResizablePanel } from '@/components/practice/ResizablePanel'
-import { DailyTranscriptionCapture } from '@/components/transcription/DailyTranscriptionCapture'
+import { MonthlyTranscriptionSectionCapture } from '@/components/transcription/MonthlyTranscriptionSectionCapture'
 import { TranscriptionStagePanel } from '@/components/transcription/TranscriptionStagePanel'
 import { PracticeToolsContent } from '@/components/practice-tools/PracticeToolsContent'
 import { useGuidedPanelLayout } from '@/hooks/use-guided-panel-layout'
@@ -34,7 +34,6 @@ import { useSessionToolsStore } from '@/stores/session-tools-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { useUIStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { currentMonthYear, type PracticeBlockId } from '@/types/practice-method'
 
@@ -64,9 +63,6 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const setSelectedSegment = useTranscriptionStore((s) => s.setSelectedSegment)
   const setActiveProject = useTranscriptionStore((s) => s.setActiveProject)
   const updateSegment = useTranscriptionStore((s) => s.updateSegment)
-  const getProject = useTranscriptionStore((s) => s.getProject)
-
-  const today = new Date().toISOString().split('T')[0]!
   const { resetSession } = useSessionToolsStore()
   const logPhaseCompletion = useAdherenceStore((s) => s.logPhaseCompletion)
   const logSkippedPhases = useAdherenceStore((s) => s.logSkippedPhases)
@@ -112,27 +108,21 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
 
   useEffect(() => {
     markPhaseStarted()
-  }, [markPhaseStarted])
-
-  useEffect(() => {
-    markPhaseStarted()
   }, [phaseIndex, markPhaseStarted])
 
-  const dailyHeroProject = transcriptionProjects.find((p) => p.practiceDate === today)
-
-  const linkedTranscriptionProject =
-    (phase?.blockId === 'transcription-integration' && dailyHeroProject
-      ? dailyHeroProject
-      : undefined) ??
-    (phase?.transcriptionStage?.projectId
-      ? transcriptionProjects.find((p) => p.id === phase.transcriptionStage!.projectId)
-      : undefined) ??
+  const monthlyTranscriptionProject =
     (monthlyPlan?.transcriptionProjectId
       ? transcriptionProjects.find((p) => p.id === monthlyPlan.transcriptionProjectId)
       : undefined) ??
     transcriptionProjects.find((p) => p.monthYear === currentMonthYear() && !p.practiceDate)
 
-  const showDailyCapture = phase?.id === 'lang-capture' && !dailyHeroProject
+  const linkedTranscriptionProject =
+    (phase?.transcriptionStage?.projectId
+      ? transcriptionProjects.find((p) => p.id === phase.transcriptionStage!.projectId)
+      : undefined) ?? monthlyTranscriptionProject
+
+  const showSectionCapture =
+    phase?.id === 'lang-capture' && Boolean(monthlyTranscriptionProject)
   const showTranscriptionPanel =
     Boolean(linkedTranscriptionProject) &&
     (Boolean(phase?.transcriptionStage) || phase?.blockId === 'transcription-integration')
@@ -140,12 +130,20 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   useEffect(() => {
     if (!linkedTranscriptionProject) return
     if (!phase?.transcriptionStage && phase?.blockId !== 'transcription-integration') return
-    setActiveProject(linkedTranscriptionProject.id)
+
+    const { activeProjectId, selectedSegmentId } = useTranscriptionStore.getState()
+    if (activeProjectId !== linkedTranscriptionProject.id) {
+      setActiveProject(linkedTranscriptionProject.id)
+    }
+
     const segmentId =
       phase.transcriptionStage?.segmentId ??
       phase.transcriptionStage?.segmentIds?.[0] ??
       linkedTranscriptionProject.segments[0]?.id
-    if (segmentId) setSelectedSegment(segmentId)
+
+    if (segmentId && selectedSegmentId !== segmentId) {
+      setSelectedSegment(segmentId)
+    }
   }, [
     phase?.id,
     phase?.transcriptionStage,
@@ -287,10 +285,6 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   }
 
   const handleCompletePhase = () => {
-    if (phase?.id === 'vocabulary-lab' && clarityRating != null) {
-      useVocabularyStore.getState().setLastMotifClarityRating(clarityRating)
-    }
-
     if (phase && !phase.isRecovery) {
       logCurrentPhase()
     }
@@ -421,13 +415,12 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
                     {phase.engagementPrompt}
                   </p>
                 )}
-                {showDailyCapture && (
-                  <DailyTranscriptionCapture
-                    practiceDate={today}
-                    onSaved={(projectId) => {
-                      setActiveProject(projectId)
-                      const project = getProject(projectId)
-                      if (project?.segments[0]) setSelectedSegment(project.segments[0].id)
+                {showSectionCapture && monthlyTranscriptionProject && (
+                  <MonthlyTranscriptionSectionCapture
+                    projectId={monthlyTranscriptionProject.id}
+                    onSaved={(segmentId) => {
+                      setActiveProject(monthlyTranscriptionProject.id)
+                      setSelectedSegment(segmentId)
                     }}
                   />
                 )}

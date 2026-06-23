@@ -61,7 +61,7 @@ export function CloudGate({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!dataReady || syncStatus === 'syncing') {
+  if (!dataReady) {
     return <GateLoading message="Loading your practice plan…" />
   }
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { APP_SNAPSHOT_VERSION, isAppSnapshot } from '@/types/app-snapshot'
-import type { CurriculumLevel } from '@/features/vocabulary-lab/types'
 import { createDefaultPracticeSchedule } from '@/types/practice-schedule'
 import { snapshotIsEmpty } from '@/lib/supabase-sync/snapshot'
 
@@ -21,12 +20,6 @@ describe('app snapshot', () => {
         practiceSchedule: createDefaultPracticeSchedule(),
       },
       transcriptions: { projects: [], activeProjectId: null, selectedSegmentId: null },
-      vocabulary: {
-        curriculumLevel: 1 as CurriculumLevel,
-        currentWeek: 1,
-        cycleStartedAt: null,
-        lastMotifClarityRating: null,
-      },
       adherence: { history: [] },
       streak: { practiceDays: [], longestStreak: 0 },
       sessionTools: {
@@ -35,7 +28,7 @@ describe('app snapshot', () => {
         metronomeSound: 'click' as const,
         beatsPerMeasure: 4,
         subdivision: 'quarter' as const,
-        metronomeVolume: -12,
+        metronomeVolume: 0.5,
         countInBars: 0,
         lastSessionDurationSeconds: 0,
       },

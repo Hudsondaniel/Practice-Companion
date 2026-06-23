@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { PRACTICE_BLOCKS, currentMonthYear, type BacklogTier } from '@/types/practice-method'
 import { CONCEPT_STAGE_LABELS } from '@/lib/app-config'
 import { EMPTY } from '@/lib/copy'
+import { getMonthlyTranscriptionLabel, syncMonthlyTranscriptionProject } from '@/lib/monthly-transcription'
+import { parseRecordingUrl } from '@/lib/recording-url'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { cn } from '@/lib/utils'
@@ -17,6 +19,17 @@ import { MonthControls } from '@/components/month/MonthControls'
 import { MonthRolloverBanner } from '@/components/month/MonthRolloverBanner'
 
 type Tab = 'monthly' | 'tunes' | 'concepts' | 'blocks'
+
+function newDeploymentPointId(): string {
+  return `dp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+interface TuneFormState {
+  title: string
+  key: string
+  barRange: string
+  chordFunction: string
+}
 
 export function PracticeLibrary() {
   const [searchParams] = useSearchParams()
@@ -74,14 +87,14 @@ export function PracticeLibrary() {
         <>
           <MonthControls />
           <MonthlySetupForm
-          month={month}
-          configured={configured}
-          existingPlan={monthlyPlan}
-          onSave={(plan) => {
-            configureMonth(plan)
-            toast.success(`Month ${month} configured. Ready to practice.`)
-          }}
-        />
+            month={month}
+            configured={configured}
+            existingPlan={monthlyPlan}
+            onSave={(plan) => {
+              configureMonth(plan)
+              toast.success(`Month ${month} configured. Ready to practice.`)
+            }}
+          />
         </>
       )}
 
@@ -106,7 +119,11 @@ export function PracticeLibrary() {
           {!configured && (
             <Card className="border-warning/50">
               <CardContent className="py-4 text-sm text-warning">
-                Complete <button type="button" className="underline" onClick={() => setTab('monthly')}>Monthly Setup</button> before starting guided sessions.
+                Complete{' '}
+                <button type="button" className="underline" onClick={() => setTab('monthly')}>
+                  Monthly Setup
+                </button>{' '}
+                before starting guided sessions.
               </CardContent>
             </Card>
           )}
@@ -137,7 +154,11 @@ export function PracticeLibrary() {
                   <Card key={tune.id}>
                     <CardHeader>
                       <CardTitle className="text-base">{tune.title}</CardTitle>
-                      <CardDescription>{tune.key} · {tune.type}</CardDescription>
+                      <CardDescription>
+                        {tune.key || 'Key not set'} · {tune.type}
+                        {tune.deploymentPoints.length > 0 &&
+                          ` · ${tune.deploymentPoints.length} deployment point${tune.deploymentPoints.length !== 1 ? 's' : ''}`}
+                      </CardDescription>
                     </CardHeader>
                   </Card>
                 ))}
@@ -148,6 +169,20 @@ export function PracticeLibrary() {
       )}
     </div>
   )
+}
+
+function tuneFromPlan(
+  existingPlan: ReturnType<typeof usePracticeStore.getState>['monthlyPlan'],
+  index: 0 | 1 | 2,
+): TuneFormState {
+  const tune = existingPlan?.tunes[index]
+  const firstDp = tune?.deploymentPoints[0]
+  return {
+    title: tune?.title ?? '',
+    key: tune?.key && tune.key !== EMPTY ? tune.key : '',
+    barRange: firstDp?.barRange ?? '',
+    chordFunction: firstDp?.chordFunction ?? '',
+  }
 }
 
 function MonthlySetupForm({
@@ -165,71 +200,108 @@ function MonthlySetupForm({
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
   const currentConcept = deviceBacklog.find((i) => i.tier === 'current')
 
-  const [tune1, setTune1] = useState(existingPlan?.tunes[0]?.title ?? '')
-  const [tune2, setTune2] = useState(existingPlan?.tunes[1]?.title ?? '')
-  const [tune3, setTune3] = useState(existingPlan?.tunes[2]?.title ?? '')
-  const [tune3Type, setTune3Type] = useState<'hymn' | 'standard'>('hymn')
+  const linkedProject = existingPlan?.transcriptionProjectId
+    ? transcriptionProjects.find((p) => p.id === existingPlan.transcriptionProjectId)
+    : transcriptionProjects.find((p) => p.monthYear === month && !p.practiceDate)
+
+  const [tune1, setTune1] = useState<TuneFormState>(() => tuneFromPlan(existingPlan, 0))
+  const [tune2, setTune2] = useState<TuneFormState>(() => tuneFromPlan(existingPlan, 1))
+  const [tune3, setTune3] = useState<TuneFormState>(() => tuneFromPlan(existingPlan, 2))
+  const [tune3Type, setTune3Type] = useState<'hymn' | 'standard'>(
+    existingPlan?.tunes[2]?.type === 'standard' ? 'standard' : 'hymn',
+  )
   const [keys, setKeys] = useState(existingPlan?.keyFocusCluster.join(', ') ?? '')
   const [dualPhase, setDualPhase] = useState<1 | 2 | 3>(existingPlan?.dualTaskPhase ?? 1)
-  const [transcriptionId, setTranscriptionId] = useState(existingPlan?.transcriptionProjectId ?? '')
   const [heroes, setHeroes] = useState(existingPlan?.heroPianists.join(', ') ?? '')
+  const [transArtist, setTransArtist] = useState(linkedProject?.artist ?? '')
+  const [transTitle, setTransTitle] = useState(linkedProject?.title ?? '')
+  const [transUrl, setTransUrl] = useState(linkedProject?.recordingUrl ?? '')
+  const [transKey, setTransKey] = useState(linkedProject?.key ?? '')
 
-  const fillExample = () => {
-    setTune1('All The Things You Are')
-    setTune2('Autumn Leaves')
-    setTune3('Great Is Thy Faithfulness')
-    setTune3Type('hymn')
-    setKeys('C, Db, D')
-    setHeroes('Oscar Peterson, Cory Henry')
+  const buildTune = (
+    form: TuneFormState,
+    id: string,
+    type: 'standard' | 'hymn',
+    existingPoints: ReturnType<typeof usePracticeStore.getState>['monthlyTunes'][0]['deploymentPoints'],
+  ) => {
+    const deploymentPoints = [...existingPoints]
+    if (form.barRange.trim() && form.chordFunction.trim()) {
+      const first = deploymentPoints[0]
+      if (first) {
+        deploymentPoints[0] = {
+          ...first,
+          barRange: form.barRange.trim(),
+          chordFunction: form.chordFunction.trim(),
+        }
+      } else {
+        deploymentPoints.push({
+          id: newDeploymentPointId(),
+          barRange: form.barRange.trim(),
+          chordFunction: form.chordFunction.trim(),
+        })
+      }
+    }
+    return {
+      id,
+      title: form.title.trim(),
+      type,
+      key: form.key.trim() || EMPTY,
+      monthYear: month,
+      deploymentPoints,
+    }
   }
-
-  const selectedTranscription = transcriptionProjects.find((p) => p.id === transcriptionId)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const keyCluster = keys.split(',').map((k) => k.trim()).filter(Boolean)
+    const keyCluster = keys
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean)
     if (keyCluster.length < 2) {
       toast.error('Enter at least 2 keys for your focus cluster')
       return
     }
+    if (!tune1.title.trim() || !tune2.title.trim() || !tune3.title.trim()) {
+      toast.error('Enter all three tune titles')
+      return
+    }
+    if (!transArtist.trim() || !transTitle.trim() || !transUrl.trim()) {
+      toast.error('Monthly transcription song requires artist, title, and recording link')
+      return
+    }
+    const parsed = parseRecordingUrl(transUrl)
+    if (parsed.type === 'unknown') {
+      toast.error('Unsupported recording link. Use YouTube, SoundSlice, or a direct audio URL.')
+      return
+    }
+
+    const transcriptionProjectId = syncMonthlyTranscriptionProject({
+      artist: transArtist.trim(),
+      title: transTitle.trim(),
+      recordingUrl: transUrl.trim(),
+      key: transKey.trim() || undefined,
+      monthYear: month,
+      existingProjectId: existingPlan?.transcriptionProjectId ?? linkedProject?.id,
+    })
 
     onSave({
       monthYear: month,
       keyFocusCluster: keyCluster,
       dualTaskPhase: dualPhase,
-      transcriptionProject: selectedTranscription
-        ? `${selectedTranscription.artist} — ${selectedTranscription.title}`
-        : 'No transcription linked',
-      transcriptionProjectId: transcriptionId || undefined,
-      heroPianists: heroes.split(',').map((h) => h.trim()).filter(Boolean),
+      transcriptionProject: getMonthlyTranscriptionLabel(transArtist.trim(), transTitle.trim()),
+      transcriptionProjectId,
+      heroPianists: heroes
+        .split(',')
+        .map((h) => h.trim())
+        .filter(Boolean),
       reviewDay: 0,
       tunes: [
-        {
-          id: existingPlan?.tunes[0]?.id ?? 't1',
-          title: tune1,
-          type: 'standard',
-          key: existingPlan?.tunes[0]?.key ?? EMPTY,
-          monthYear: month,
-          deploymentPoints: existingPlan?.tunes[0]?.deploymentPoints ?? [],
-        },
-        {
-          id: existingPlan?.tunes[1]?.id ?? 't2',
-          title: tune2,
-          type: 'standard',
-          key: existingPlan?.tunes[1]?.key ?? EMPTY,
-          monthYear: month,
-          deploymentPoints: existingPlan?.tunes[1]?.deploymentPoints ?? [],
-        },
-        {
-          id: existingPlan?.tunes[2]?.id ?? 't3',
-          title: tune3,
-          type: tune3Type,
-          key: existingPlan?.tunes[2]?.key ?? EMPTY,
-          monthYear: month,
-          deploymentPoints: existingPlan?.tunes[2]?.deploymentPoints ?? [],
-        },
+        buildTune(tune1, existingPlan?.tunes[0]?.id ?? 't1', 'standard', existingPlan?.tunes[0]?.deploymentPoints ?? []),
+        buildTune(tune2, existingPlan?.tunes[1]?.id ?? 't2', 'standard', existingPlan?.tunes[1]?.deploymentPoints ?? []),
+        buildTune(tune3, existingPlan?.tunes[2]?.id ?? 't3', tune3Type, existingPlan?.tunes[2]?.deploymentPoints ?? []),
       ],
       extendedWeek: existingPlan?.extendedWeek,
+      monthStartedAt: existingPlan?.monthStartedAt ?? new Date().toISOString().split('T')[0]!,
     })
   }
 
@@ -238,50 +310,84 @@ function MonthlySetupForm({
       <CardHeader>
         <CardTitle>Initialize {month}</CardTitle>
         <CardDescription>
-          Lock your 3-tune lab, key cluster, and method settings for 4 weeks. Daily hero recordings are added
-          during Link Concept to Hero in guided sessions.
+          Lock your 3-tune lab, monthly transcription song, keys, and deployment points. Add more
+          transcription sections during guided sessions.
         </CardDescription>
         {configured && <Badge variant="success">Configured</Badge>}
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
             <span className="text-muted-foreground">Active concept: </span>
             <strong>{currentConcept?.label ?? 'Set in Concepts tab'}</strong>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Standard 1" value={tune1} onChange={setTune1} />
-            <Field label="Standard 2" value={tune2} onChange={setTune2} />
-            <Field label="Hymn / Standard 3" value={tune3} onChange={setTune3} />
-          </div>
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold">Monthly tunes</h3>
+            <TuneFields
+              label="Standard 1"
+              value={tune1}
+              onChange={setTune1}
+            />
+            <TuneFields
+              label="Standard 2"
+              value={tune2}
+              onChange={setTune2}
+            />
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-medium">
+                  {tune3Type === 'hymn' ? 'Hymn 3' : 'Standard 3'}
+                </h4>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={tune3Type === 'hymn' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setTune3Type('hymn')}
+                  >
+                    Hymn
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={tune3Type === 'standard' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setTune3Type('standard')}
+                  >
+                    Standard
+                  </Button>
+                </div>
+              </div>
+              <TuneFields label="" value={tune3} onChange={setTune3} hideTitleLabel />
+            </div>
+          </section>
 
-          <div className="flex gap-2">
-            <Button type="button" variant={tune3Type === 'hymn' ? 'default' : 'outline'} size="sm" onClick={() => setTune3Type('hymn')}>Hymn</Button>
-            <Button type="button" variant={tune3Type === 'standard' ? 'default' : 'outline'} size="sm" onClick={() => setTune3Type('standard')}>Standard</Button>
-          </div>
+          <Field
+            label="Key focus cluster (comma-separated)"
+            value={keys}
+            onChange={setKeys}
+            placeholder="C, Db, D"
+          />
 
-          <Field label="Key focus cluster (comma-separated)" value={keys} onChange={setKeys} placeholder="C, Db, D" />
-          <div>
-            <label className="mb-1 block text-sm font-medium">Transcription project</label>
-            <select
-              value={transcriptionId}
-              onChange={(e) => setTranscriptionId(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Select from Transcriptions…</option>
-              {transcriptionProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.artist} — {p.title} ({p.segments.length} sections)
-                </option>
-              ))}
-            </select>
-            {transcriptionProjects.length === 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Add a recording in Transcriptions first, then link it here.
-              </p>
-            )}
-          </div>
+          <section className="space-y-3 rounded-lg border border-border p-4">
+            <h3 className="text-sm font-semibold">Monthly transcription song</h3>
+            <p className="text-xs text-muted-foreground">
+              One recording for the whole month. You&apos;ll add sections to transcribe during guided
+              practice — not a new song every day.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Artist" value={transArtist} onChange={setTransArtist} placeholder="Oscar Peterson" />
+              <Field label="Tune / title" value={transTitle} onChange={setTransTitle} placeholder="C Jam Blues" />
+            </div>
+            <Field
+              label="Recording link"
+              value={transUrl}
+              onChange={setTransUrl}
+              placeholder="YouTube, SoundSlice, or direct audio URL"
+            />
+            <Field label="Key (optional)" value={transKey} onChange={setTransKey} placeholder="F blues" />
+          </section>
+
           <Field label="Hero pianists (comma-separated)" value={heroes} onChange={setHeroes} />
 
           <div>
@@ -297,10 +403,6 @@ function MonthlySetupForm({
             </select>
           </div>
 
-          <Button type="button" variant="outline" size="sm" onClick={fillExample}>
-            Use example month
-          </Button>
-
           <Button type="submit">{configured ? 'Update month plan' : 'Initialize month'}</Button>
         </form>
       </CardContent>
@@ -308,10 +410,64 @@ function MonthlySetupForm({
   )
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function TuneFields({
+  label,
+  value,
+  onChange,
+  hideTitleLabel,
+}: {
+  label: string
+  value: TuneFormState
+  onChange: (v: TuneFormState) => void
+  hideTitleLabel?: boolean
+}) {
+  return (
+    <div className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-2">
+      {label && !hideTitleLabel && (
+        <p className="text-sm font-medium md:col-span-2">{label}</p>
+      )}
+      <Field
+        label="Title"
+        value={value.title}
+        onChange={(title) => onChange({ ...value, title })}
+        placeholder="Autumn Leaves"
+      />
+      <Field
+        label="Key"
+        value={value.key}
+        onChange={(key) => onChange({ ...value, key })}
+        placeholder="Bb"
+      />
+      <Field
+        label="Deployment bar range"
+        value={value.barRange}
+        onChange={(barRange) => onChange({ ...value, barRange })}
+        placeholder="mm. 17–20"
+      />
+      <Field
+        label="Chord function at deployment"
+        value={value.chordFunction}
+        onChange={(chordFunction) => onChange({ ...value, chordFunction })}
+        placeholder="ii–V–I"
+      />
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium">{label}</label>
+      {label ? <label className="mb-1 block text-sm font-medium">{label}</label> : null}
       <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   )
@@ -378,7 +534,9 @@ function ConceptsPanel({
               <Badge variant="outline">{activeConcept.consecutivePassDays}/3 pass days</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => onIncrementPass()}>+1 pass day</Button>
+              <Button size="sm" variant="outline" onClick={() => onIncrementPass()}>
+                +1 pass day
+              </Button>
               <select
                 value={activeConcept.stage}
                 onChange={(e) => onUpdateStage(e.target.value as typeof activeConcept.stage)}
@@ -402,11 +560,13 @@ function ConceptsPanel({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Promotion gates: 3 consecutive pass days · dual-task Phase 3 · cold deployment · sound-target review.
-              Stage: cognitive → associative → automatic.
+              Promotion gates: 3 consecutive pass days · dual-task Phase 3 · cold deployment · sound-target
+              review. Stage: cognitive → associative → automatic.
             </p>
             {activeConcept.consecutivePassDays >= 3 && activeConcept.dualTaskPhase >= 3 && (
-              <p className="text-xs font-medium text-success">Eligible for retirement — confirm automaticity criteria met.</p>
+              <p className="text-xs font-medium text-success">
+                Eligible for retirement — confirm automaticity criteria met.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -414,18 +574,29 @@ function ConceptsPanel({
 
       <div className="flex justify-between">
         <h2 className="text-lg font-semibold">Concept library</h2>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : 'Add concept'}</Button>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : 'Add concept'}
+        </Button>
       </div>
 
       {showForm && (
         <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleAdd} className="space-y-3">
-              <Input placeholder="Label (retrieval-sized, one line)" value={label} onChange={(e) => setLabel(e.target.value)} required />
+              <Input
+                placeholder="Label (retrieval-sized, one line)"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                required
+              />
               <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
               <Input placeholder="Harmonic context (e.g. V7 in ii–V–I)" value={harmonic} onChange={(e) => setHarmonic(e.target.value)} />
               <Input placeholder="Keys: C, F, Bb" value={keys} onChange={(e) => setKeys(e.target.value)} />
-              <select value={tier} onChange={(e) => setTier(e.target.value as BacklogTier)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
+              <select
+                value={tier}
+                onChange={(e) => setTier(e.target.value as BacklogTier)}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              >
                 <option value="future">Future</option>
                 <option value="next">Next</option>
                 <option value="current">Current (sets as active)</option>

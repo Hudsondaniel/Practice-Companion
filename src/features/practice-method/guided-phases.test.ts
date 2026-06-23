@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateGuidedPhases } from './guided-phases'
 import type { ActiveConcept } from '@/types/practice-method'
-import { allocateStepDurations } from '@/lib/step-timing'
 import type { DeviceBacklogItem } from '@/types/practice-method'
 
 const mockConcept: ActiveConcept = {
@@ -63,7 +62,7 @@ describe('generateGuidedPhases', () => {
     expect(deepWorkPhases.map((p) => p.id)).toEqual(['concept-library-review', 'deep-work'])
   })
 
-  it('includes one Vocabulary Lab phase (25 min)', () => {
+  it('does not include vocabulary lab block', () => {
     const phases = generateGuidedPhases({
       dayType: 'identity',
       activeConcept: mockConcept,
@@ -71,24 +70,6 @@ describe('generateGuidedPhases', () => {
       date: new Date('2026-06-15T12:00:00'),
     })
 
-    const vocabPhases = phases.filter((p) => p.blockId === 'agility-fluency-lab')
-    expect(vocabPhases).toHaveLength(1)
-    expect(vocabPhases[0]?.id).toBe('vocabulary-lab')
-    expect(vocabPhases[0]?.durationMinutes).toBe(25)
-    expect(vocabPhases[0]?.blockName).toBe('Vocabulary Lab')
-  })
-
-  it('vocabulary steps sum to phase duration', () => {
-    const phases = generateGuidedPhases({
-      dayType: 'identity',
-      activeConcept: mockConcept,
-      monthlyTunes: [],
-      date: new Date('2026-06-15T12:00:00'),
-    })
-    const vocab = phases.find((p) => p.id === 'vocabulary-lab')
-    expect(vocab).toBeDefined()
-    const totalSeconds = vocab!.durationMinutes * 60
-    const durations = allocateStepDurations(vocab!.steps, totalSeconds)
-    expect(durations.reduce((a, b) => a + b, 0)).toBe(totalSeconds)
+    expect(phases.some((p) => p.id === 'vocabulary-lab')).toBe(false)
   })
 })

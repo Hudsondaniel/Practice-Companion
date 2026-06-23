@@ -14,19 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { usePracticeStore } from '@/stores/practice-store'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
-import { getVocabularyContext } from '@/features/vocabulary-lab/rotation'
 
 export function Analytics() {
   const history = useAdherenceStore((s) => s.history)
   const practiceDays = useStreakStore((s) => s.practiceDays)
-  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
-  const currentWeek = useVocabularyStore((s) => s.currentWeek)
-  const { curriculumLevel } = useVocabularyStore()
-  const vocabCtx = useMemo(
-    () => getVocabularyContext(currentWeek, curriculumLevel),
-    [currentWeek, curriculumLevel],
-  )
   const activeConcept = usePracticeStore((s) => s.activeConcept)
 
   const consistency = useMemo(() => {
@@ -71,23 +62,14 @@ export function Analytics() {
       'transcription-integration': 'Transcription',
       'standards-hymns-lab': 'Standards Lab',
       'cold-pressure': 'Cold/Pressure',
-      'agility-fluency-lab': 'Vocabulary Lab',
+      consolidation: 'Consolidation',
+      'recording-review': 'Recording Review',
     }
     return [...counts.entries()].map(([id, count]) => ({
       block: labels[id] ?? id,
       issues: count,
     }))
   }, [history])
-
-  const vocabularyProgress = useMemo(() => {
-    return [
-      {
-        label: `Week ${vocabCtx.macroWeek}`,
-        pillar: vocabCtx.module.pillar,
-        clarity: lastMotifClarity ?? 0,
-      },
-    ]
-  }, [vocabCtx, lastMotifClarity])
 
   return (
     <div className="space-y-6">
@@ -170,35 +152,6 @@ export function Analytics() {
                 <Bar dataKey="issues" fill="var(--color-warning)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Vocabulary Lab</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-lg font-medium">
-            Week {vocabCtx.macroWeek}/12 · {vocabCtx.module.title}
-          </p>
-          <p className="text-sm text-muted-foreground capitalize">{vocabCtx.module.pillar} focus</p>
-          {lastMotifClarity != null && (
-            <p className="mt-2 text-sm">
-              Last motif clarity: <strong>{lastMotifClarity}/5</strong>
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {vocabularyProgress.length > 0 && lastMotifClarity != null && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Motif clarity (latest fusion week)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-primary">{lastMotifClarity}/5</p>
-            <p className="text-sm text-muted-foreground">From Vocabulary Lab fusion week rating</p>
           </CardContent>
         </Card>
       )}

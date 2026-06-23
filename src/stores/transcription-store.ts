@@ -88,7 +88,11 @@ export const useTranscriptionStore = create<TranscriptionState>()((set, get) => 
           selectedSegmentId: null,
         })),
 
-      setActiveProject: (id) => set({ activeProjectId: id, selectedSegmentId: null }),
+      setActiveProject: (id) =>
+        set((state) => {
+          if (state.activeProjectId === id) return state
+          return { activeProjectId: id, selectedSegmentId: null }
+        }),
 
       setSelectedSegment: (segmentId) => set({ selectedSegmentId: segmentId }),
 

@@ -15,8 +15,7 @@ describe('generatePracticeSession', () => {
     })
 
     expect(session.totalMinutes).toBe(BASE_SESSION_MINUTES)
-    expect(session.blocks).toHaveLength(6)
-    expect(session.blocks.some((b) => b.blockId === 'agility-fluency-lab')).toBe(true)
+    expect(session.blocks).toHaveLength(5)
     expect(session.blocks.some((b) => b.blockId === 'recording-review')).toBe(false)
   })
 
@@ -33,6 +32,5 @@ describe('generatePracticeSession', () => {
 
     expect(session.blocks.some((b) => b.blockId === 'recording-review')).toBe(true)
     expect(session.blocks.some((b) => b.blockId === 'consolidation')).toBe(false)
-    expect(session.blocks.some((b) => b.blockId === 'agility-fluency-lab')).toBe(true)
   })
 })

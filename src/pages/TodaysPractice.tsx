@@ -25,7 +25,6 @@ import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
 
 export function TodaysPractice() {
   const scheduledDayType = getDayType()
@@ -55,7 +54,6 @@ export function TodaysPractice() {
   const startSession = useGuidedSessionStore((s) => s.startSession)
   const resumeSession = useGuidedSessionStore((s) => s.resumeSession)
   const isDayCompleteForToday = useGuidedSessionStore((s) => s.isDayCompleteForToday())
-  const lastMotifClarity = useVocabularyStore((s) => s.lastMotifClarityRating)
 
   const today = new Date().toISOString().split('T')[0]!
   const pausedSession = isPausedForDay && sessionDate === today && phases.length > 0
@@ -75,9 +73,9 @@ export function TodaysPractice() {
   const sessionZones =
     dayType === 'review'
       ? [
-          ...SESSION_ZONES.filter((z) => z.id !== 'technique'),
+          ...SESSION_ZONES,
           {
-            id: 'technique' as const,
+            id: 'recording-review' as const,
             name: 'Recording Review',
             description: 'Sound-target review of your weekly clips',
           },
@@ -117,7 +115,6 @@ export function TodaysPractice() {
       }
 
       const linkedTranscription =
-        transcriptionProjects.find((p) => p.practiceDate === today) ??
         (monthlyPlan?.transcriptionProjectId
           ? transcriptionProjects.find((p) => p.id === monthlyPlan.transcriptionProjectId)
           : undefined) ??
@@ -202,12 +199,6 @@ export function TodaysPractice() {
         <div>
           <h1 className="page-heading">Today&apos;s Practice</h1>
           <p className="text-muted-foreground">{BASE_SESSION_MINUTES}-minute guided session</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vocabulary Lab lives in the sidebar —{' '}
-            <Link to="/vocabulary" className="text-primary hover:underline">
-              view week &amp; 12-week plan
-            </Link>
-          </p>
         </div>
         <Badge
           variant={dayType === 'review' ? 'warning' : isRestDay ? 'outline' : 'secondary'}
@@ -262,9 +253,6 @@ export function TodaysPractice() {
                 practice day.
               </p>
             </div>
-            {lastMotifClarity != null && (
-              <Badge variant="secondary">Motif clarity: {lastMotifClarity}/5</Badge>
-            )}
           </CardContent>
         </Card>
       )}
@@ -334,12 +322,6 @@ export function TodaysPractice() {
                     ? 'Continue Session'
                     : 'Start Guided Session'}
               </Button>
-
-              {lastMotifClarity != null && (
-                <p className="text-xs text-muted-foreground">
-                  Last motif clarity (fusion week): <strong>{lastMotifClarity}/5</strong>
-                </p>
-              )}
             </CardContent>
           </Card>
 

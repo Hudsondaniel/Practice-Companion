@@ -146,8 +146,16 @@ export const usePracticeStore = create<PracticeState>()((set, get) => ({
       },
 
       configureMonth: (planInput) => {
+        const existing = get().monthlyPlan
+        const today = new Date().toISOString().split('T')[0]!
+        const monthStartedAt =
+          existing?.monthYear === planInput.monthYear && existing.monthStartedAt
+            ? existing.monthStartedAt
+            : today
+
         const plan: MonthlyPlan = {
           ...planInput,
+          monthStartedAt,
           configuredAt: new Date().toISOString(),
         }
         const current = get().deviceBacklog.find((i) => i.tier === 'current')

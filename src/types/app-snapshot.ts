@@ -9,7 +9,6 @@ import type {
 } from '@/types/practice-method'
 import type { PracticeWeekSchedule } from '@/types/practice-schedule'
 import type { TranscriptionProject } from '@/types/transcription'
-import type { CurriculumLevel } from '@/features/vocabulary-lab/types'
 import type { MetronomeSound, MetronomeSubdivision } from '@/lib/metronome'
 
 export const APP_SNAPSHOT_VERSION = 1 as const
@@ -31,13 +30,6 @@ export interface TranscriptionSnapshot {
   projects: TranscriptionProject[]
   activeProjectId: string | null
   selectedSegmentId: string | null
-}
-
-export interface VocabularySnapshot {
-  curriculumLevel: CurriculumLevel
-  currentWeek: number
-  cycleStartedAt: string | null
-  lastMotifClarityRating: number | null
 }
 
 export interface AdherenceSnapshot {
@@ -75,11 +67,12 @@ export interface AppSnapshot {
   version: typeof APP_SNAPSHOT_VERSION
   practice: PracticeSnapshot
   transcriptions: TranscriptionSnapshot
-  vocabulary: VocabularySnapshot
   adherence: AdherenceSnapshot
   streak: StreakSnapshot
   sessionTools: SessionToolsSnapshot
   guidedSession: GuidedSessionSnapshot | null
+  /** @deprecated legacy field — ignored on load */
+  vocabulary?: unknown
 }
 
 export function isAppSnapshot(value: unknown): value is AppSnapshot {

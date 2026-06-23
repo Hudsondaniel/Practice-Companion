@@ -15,7 +15,6 @@ import { usePracticeStore } from '@/stores/practice-store'
 import { useSessionToolsStore } from '@/stores/session-tools-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline'
 
@@ -52,7 +51,6 @@ function deferAuthSideEffect(fn: () => void): void {
 const SYNC_STORES = [
   usePracticeStore,
   useTranscriptionStore,
-  useVocabularyStore,
   useAdherenceStore,
   useStreakStore,
   useSessionToolsStore,
@@ -245,7 +243,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   syncNow: async () => {
     const userId = get().user?.id
     if (!userId || !get().dataReady) return
-    set({ syncStatus: 'syncing', syncError: null })
     try {
       const updatedAt = await pushLocalSnapshot(userId)
       set({ syncStatus: 'synced', lastSyncedAt: updatedAt, syncError: null })

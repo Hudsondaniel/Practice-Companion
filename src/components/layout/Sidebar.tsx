@@ -7,7 +7,6 @@ import {
   ClipboardList,
   FileMusic,
   Home,
-  Languages,
   Mic,
   Piano,
   Settings,
@@ -20,7 +19,6 @@ import { APP_NAME } from '@/lib/app-config'
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: Home },
   { to: '/practice', label: "Today's Practice", icon: Piano },
-  { to: '/vocabulary', label: 'Vocabulary Lab', icon: Languages },
   { to: '/library', label: 'Practice Library', icon: BookOpen },
   { to: '/transcriptions', label: 'Transcriptions', icon: FileMusic },
   { to: '/recordings', label: 'Recordings', icon: Mic },

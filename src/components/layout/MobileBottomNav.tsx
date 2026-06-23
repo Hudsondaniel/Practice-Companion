@@ -1,13 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { BookOpen, Home, Languages, Menu, Piano } from 'lucide-react'
+import { BookOpen, FileMusic, Home, Menu, Piano } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/practice', label: 'Practice', icon: Piano, end: false },
-  { to: '/vocabulary', label: 'Vocab', icon: Languages, end: false },
   { to: '/library', label: 'Library', icon: BookOpen, end: false },
+  { to: '/transcriptions', label: 'Transcribe', icon: FileMusic, end: false },
 ] as const
 
 export function MobileBottomNav() {
@@ -15,7 +15,7 @@ export function MobileBottomNav() {
   const toggleMobileNav = useUIStore((s) => s.toggleMobileNav)
   const mobileNavOpen = useUIStore((s) => s.mobileNavOpen)
 
-  const moreActive = ['/transcriptions', '/recordings', '/analytics', '/settings'].some((path) =>
+  const moreActive = ['/recordings', '/analytics', '/settings'].some((path) =>
     location.pathname.startsWith(path),
   )
 

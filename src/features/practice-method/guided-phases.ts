@@ -2,7 +2,7 @@ import type { ActiveConcept, DayType, DeviceBacklogItem, GuidedPhase, MonthlyTun
 import { PRACTICE_BLOCKS, SESSION_ZONES } from '@/types/practice-method'
 import { formatTimestamp } from '@/lib/time-parse'
 import type { TranscriptionSegment } from '@/types/transcription'
-import { vocabularyLabSteps, step, stepsFromStrings } from '@/features/practice-method/step'
+import { step, stepsFromStrings } from '@/features/practice-method/step'
 import {
   buildColdPressureSteps,
   buildConceptReviewSteps,
@@ -14,7 +14,6 @@ import {
   buildRepertoireCircuitSteps,
   conceptReviewMinutes,
 } from '@/features/practice-method/phase-step-details'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
 import {
   formatMonthContext,
   getDeloadVolumeMultiplier,
@@ -258,10 +257,10 @@ export function generateGuidedPhases(ctx: PhaseContext): GuidedPhase[] {
         sessionZone: 'language',
         blockId: 'transcription-integration',
         blockName: 'Language Acquisition',
-        title: "Capture Today's Line",
+        title: 'Add Transcription Section',
         durationMinutes: 10,
-        objective: 'Add any hero recording you want to absorb — no need to match your active concept',
-        engagementPrompt: 'Pick a line you love from any recording. Vocabulary acquisition, not concept matching.',
+        objective: `Mark a new section to transcribe from ${transcription}`,
+        engagementPrompt: 'One song for the month — add the passage you want to work on today.',
         transcriptionStage:
           projectId && projectSegments.length > 0
             ? transcriptionStageForPhase(projectId, projectSegments, workSegment?.id, segmentIds)
@@ -314,31 +313,6 @@ export function generateGuidedPhases(ctx: PhaseContext): GuidedPhase[] {
       engagementPrompt: 'Hit record on the trust run if you can.',
       steps: buildColdPressureSteps(dualPhase),
       checkpoint: 'Did you write both log lines?',
-    })
-  }
-
-  if (blockIds.includes('agility-fluency-lab')) {
-    const { currentWeek, curriculumLevel } = useVocabularyStore.getState()
-    const vocab = vocabularyLabSteps(activeConcept.keyFocusCluster, {
-      currentWeek,
-      level: curriculumLevel,
-      date,
-      monthlyTuneTitles: monthlyTunes.map((t) => t.title),
-    })
-    phases.push({
-      id: 'vocabulary-lab',
-      sessionZone: 'technique',
-      blockId: 'agility-fluency-lab',
-      blockName: 'Vocabulary Lab',
-      title: vocab.phaseTitle,
-      durationMinutes: vocab.durationMinutes,
-      objective: vocab.objective,
-      steps: vocab.steps,
-      tips: vocab.tips,
-      promptClarityRating: vocab.promptMotifClarity,
-      checkpoint: vocab.promptMotifClarity
-        ? 'Tri-sound audible? Rate motif clarity 1–5 before finishing.'
-        : 'Did today\'s vocabulary feel like language, not scales?',
     })
   }
 

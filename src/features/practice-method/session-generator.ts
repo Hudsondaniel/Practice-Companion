@@ -69,7 +69,6 @@ export function generatePracticeSession(input: SessionInput): GeneratedSession {
     recoveryPeriods: [
       { afterBlock: 'concept-forge', minutes: 1, activity: 'Stand, shake hands, 3 deep breaths' },
       { afterBlock: 'standards-hymns-lab', minutes: 2, activity: 'Hydrate, shoulder rolls, reset ears' },
-      { afterBlock: 'agility-fluency-lab', minutes: 1, activity: 'Shake hands, reset ears after vocabulary work' },
     ],
     estimatedCompletionTime: formatCompletion(cursor),
   }
@@ -105,14 +104,7 @@ function getBlockInstructions(
         'No-evaluation trust run — record, no corrections',
         'Daily log: concept stage + tomorrow focus',
       ]
-    case 'agility-fluency-lab':
-      return [
-        'Sound immersion: hear today\'s pentatonic, blues, or altered color',
-        'Sing → call/response → motif extraction (language, not scales)',
-        'Harmonic deployment on monthly tune or ii–V–I',
-        'Tri-sound integration: pentatonic, blues, altered in one phrase',
-      ]
-    case 'consolidation':
+    case 'cold-pressure':
       return [
         'Mental practice: 3 keys, imagine monthly tune deployment',
         'Active listening: hunt Active Concept in source recordings',
@@ -145,13 +137,6 @@ function getSubBlocks(
       { name: 'Hero Link', minutes: Math.round(totalMinutes * 0.5), instructions: [] },
       { name: 'Three Key Pass', minutes: Math.round(totalMinutes * 0.25), instructions: [] },
       { name: 'Monthly Tune Deployment', minutes: Math.round(totalMinutes * 0.25), instructions: [] },
-    ]
-  }
-  if (blockId === 'agility-fluency-lab') {
-    return [
-      { name: 'Hear & sing', minutes: 8, instructions: [] },
-      { name: 'Call & motif', minutes: 10, instructions: [] },
-      { name: 'Deploy & integrate', minutes: 7, instructions: [] },
     ]
   }
   return undefined

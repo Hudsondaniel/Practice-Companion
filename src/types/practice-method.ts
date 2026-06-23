@@ -7,7 +7,6 @@ export type PracticeBlockId =
   | 'transcription-integration'
   | 'standards-hymns-lab'
   | 'cold-pressure'
-  | 'agility-fluency-lab'
   | 'consolidation'
   | 'recording-review'
 
@@ -57,14 +56,6 @@ export const PRACTICE_BLOCKS: PracticeBlock[] = [
     description: 'Unfamiliar material, dual-task tests, no-evaluation trust run, quick diagnostic log',
   },
   {
-    id: 'agility-fluency-lab',
-    name: 'Vocabulary Lab',
-    durationMinutes: 25,
-    focus: 'Improvisational language — pentatonic, blues, altered',
-    description:
-      'Spiral curriculum: hear, sing, motif, deploy, and integrate sounds as vocabulary — not scale drills',
-  },
-  {
     id: 'consolidation',
     name: 'Consolidation & Listening',
     durationMinutes: 10,
@@ -97,7 +88,7 @@ export interface StepPedagogy {
   measure: string
 }
 
-export type SessionZone = 'deep-work' | 'language' | 'repertoire' | 'technique'
+export type SessionZone = 'deep-work' | 'language' | 'repertoire'
 
 export const SESSION_ZONES: { id: SessionZone; name: string; description: string }[] = [
   {
@@ -114,11 +105,6 @@ export const SESSION_ZONES: { id: SessionZone; name: string; description: string
     id: 'repertoire',
     name: 'Repertoire & Transfer',
     description: 'Monthly tunes, pressure tests, and trust runs without extra block switches',
-  },
-  {
-    id: 'technique',
-    name: 'Vocabulary & Integration',
-    description: 'Pentatonic, blues, and altered language — motif development and tri-sound integration',
   },
 ]
 
@@ -265,6 +251,8 @@ export interface MonthlyPlan {
   reviewDay: number
   /** Optional 5th week extension on the same tune lab */
   extendedWeek?: boolean
+  /** When the user started this practice month (ISO date) — weeks are relative to this */
+  monthStartedAt?: string
 }
 
 export function currentMonthYear(date = new Date()): string {

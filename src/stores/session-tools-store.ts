@@ -82,7 +82,7 @@ export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
       metronomeSound: 'click',
       beatsPerMeasure: 4,
       subdivision: 'quarter',
-      metronomeVolume: 0.8,
+      metronomeVolume: 0.5,
       countInBars: 0,
       isMetronomePlaying: false,
       isRecording: false,
@@ -130,7 +130,7 @@ export const useSessionToolsStore = create<SessionToolsState>()((set, get) => ({
       },
 
       setMetronomeVolume: (volume) => {
-        set({ metronomeVolume: volume })
+        set({ metronomeVolume: Math.min(1, Math.max(0, volume)) })
         void get().restartMetronomeIfPlaying()
       },
 

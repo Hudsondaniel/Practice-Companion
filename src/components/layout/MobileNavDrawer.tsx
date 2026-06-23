@@ -3,7 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   BarChart3,
   ClipboardList,
-  FileMusic,
   Mic,
   Settings,
   X,
@@ -14,7 +13,6 @@ import { useUIStore } from '@/stores/ui-store'
 import { Button } from '@/components/ui/button'
 
 const MORE_NAV = [
-  { to: '/transcriptions', label: 'Transcriptions', icon: FileMusic },
   { to: '/recordings', label: 'Recordings', icon: Mic },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },

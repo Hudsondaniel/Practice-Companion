@@ -4,18 +4,29 @@ import {
   type AppSnapshot,
   isAppSnapshot,
 } from '@/types/app-snapshot'
-import { normalizeVocabularyFromSnapshot } from '@/stores/vocabulary-store'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useSessionToolsStore } from '@/stores/session-tools-store'
 import { useStreakStore } from '@/stores/streak-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
-import { useVocabularyStore } from '@/stores/vocabulary-store'
-import type { GuidedPhase } from '@/types/practice-method'
+import type { GuidedPhase, MonthlyPlan } from '@/types/practice-method'
 
 function todayIso(): string {
   return new Date().toISOString().split('T')[0]!
+}
+
+function normalizeMetronomeVolume(volume: number): number {
+  if (volume < 0 || volume > 1) return 0.5
+  return volume
+}
+
+function normalizeMonthlyPlan(plan: MonthlyPlan | null): MonthlyPlan | null {
+  if (!plan) return null
+  return {
+    ...plan,
+    monthStartedAt: plan.monthStartedAt ?? plan.configuredAt?.split('T')[0] ?? todayIso(),
+  }
 }
 
 /** Empty practice state — new accounts start here; nothing is kept in localStorage. */
@@ -39,12 +50,6 @@ export function createEmptyAppSnapshot(): AppSnapshot {
       activeProjectId: null,
       selectedSegmentId: null,
     },
-    vocabulary: {
-      curriculumLevel: 1,
-      currentWeek: 1,
-      cycleStartedAt: null,
-      lastMotifClarityRating: null,
-    },
     adherence: { history: [] },
     streak: { practiceDays: [], longestStreak: 0 },
     sessionTools: {
@@ -53,7 +58,7 @@ export function createEmptyAppSnapshot(): AppSnapshot {
       metronomeSound: 'click',
       beatsPerMeasure: 4,
       subdivision: 'quarter',
-      metronomeVolume: -12,
+      metronomeVolume: 0.5,
       countInBars: 0,
       lastSessionDurationSeconds: null,
     },
@@ -65,7 +70,6 @@ export function createEmptyAppSnapshot(): AppSnapshot {
 export function collectAppSnapshot(): AppSnapshot {
   const practice = usePracticeStore.getState()
   const transcriptions = useTranscriptionStore.getState()
-  const vocabulary = useVocabularyStore.getState()
   const adherence = useAdherenceStore.getState()
   const streak = useStreakStore.getState()
   const tools = useSessionToolsStore.getState()
@@ -104,12 +108,6 @@ export function collectAppSnapshot(): AppSnapshot {
       activeProjectId: transcriptions.activeProjectId,
       selectedSegmentId: transcriptions.selectedSegmentId,
     },
-    vocabulary: {
-      curriculumLevel: vocabulary.curriculumLevel,
-      currentWeek: vocabulary.currentWeek,
-      cycleStartedAt: vocabulary.cycleStartedAt,
-      lastMotifClarityRating: vocabulary.lastMotifClarityRating,
-    },
     adherence: {
       history: adherence.history,
     },
@@ -144,12 +142,14 @@ function normalizeGuidedAfterCloudLoad(): void {
 
 /** Apply cloud snapshot to in-memory stores. */
 export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
+  const monthlyPlan = normalizeMonthlyPlan(snapshot.practice.monthlyPlan)
+
   usePracticeStore.setState({
     activeConcept: snapshot.practice.activeConcept,
     deviceBacklog: snapshot.practice.deviceBacklog,
     monthlyTunes: snapshot.practice.monthlyTunes,
-    monthlyPlan: snapshot.practice.monthlyPlan,
-    archivedMonthlyPlans: snapshot.practice.archivedMonthlyPlans,
+    monthlyPlan,
+    archivedMonthlyPlans: snapshot.practice.archivedMonthlyPlans.map((p) => normalizeMonthlyPlan(p)!),
     todaySession: snapshot.practice.todaySession,
     currentBlockId: snapshot.practice.currentBlockId,
     streak: snapshot.practice.streak,
@@ -165,8 +165,6 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
     activeProjectId: snapshot.transcriptions.activeProjectId,
     selectedSegmentId: snapshot.transcriptions.selectedSegmentId,
   })
-
-  useVocabularyStore.setState(normalizeVocabularyFromSnapshot(snapshot.vocabulary))
 
   useAdherenceStore.setState({
     history: snapshot.adherence.history,
@@ -184,7 +182,7 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
     metronomeSound: snapshot.sessionTools.metronomeSound,
     beatsPerMeasure: snapshot.sessionTools.beatsPerMeasure,
     subdivision: snapshot.sessionTools.subdivision,
-    metronomeVolume: snapshot.sessionTools.metronomeVolume,
+    metronomeVolume: normalizeMetronomeVolume(snapshot.sessionTools.metronomeVolume),
     countInBars: snapshot.sessionTools.countInBars,
     lastSessionDurationSeconds: snapshot.sessionTools.lastSessionDurationSeconds,
   })
