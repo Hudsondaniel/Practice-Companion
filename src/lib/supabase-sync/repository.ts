@@ -1,5 +1,6 @@
 import { mapSyncError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
+import { readLocalBackup } from '@/lib/supabase-sync/local-backup'
 import {
   collectAppSnapshot,
   createEmptyAppSnapshot,
@@ -55,18 +56,27 @@ export async function saveCloudSnapshot(userId: string, snapshot: AppSnapshot): 
   return updated_at
 }
 
-/** Load practice data from Supabase only — no local fallback. */
+/** Load practice data from Supabase, recovering from local memory or session backup when cloud is stale. */
 export async function loadUserDataFromCloud(userId: string): Promise<string> {
+  const local = collectAppSnapshot()
+  const backup = readLocalBackup(userId)
   const cloud = await loadCloudSnapshot(userId)
+
+  const bestLocal = !snapshotIsEmpty(local) ? local : backup
 
   if (cloud && !snapshotIsEmpty(cloud.snapshot)) {
     hydrateAppSnapshot(cloud.snapshot)
     return cloud.updated_at
   }
 
+  if (bestLocal) {
+    hydrateAppSnapshot(bestLocal)
+    return saveCloudSnapshot(userId, bestLocal)
+  }
+
   if (cloud?.snapshot) {
     const parsed = parseAppSnapshot(cloud.snapshot)
-    if (parsed) {
+    if (parsed && !snapshotIsEmpty(parsed)) {
       hydrateAppSnapshot(parsed)
       return cloud.updated_at
     }

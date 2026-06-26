@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, User } from '@supabase/supabase-js'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import { mapSaveError, mapSyncError } from '@/lib/errors'
 import {
   AUTH_ACCOUNT_EXISTS,
@@ -7,8 +7,9 @@ import {
   mapAuthError as mapAuthErr,
 } from '@/lib/auth-errors'
 import { supabase } from '@/lib/supabase'
+import { clearLocalBackup, readLocalBackup, writeLocalBackup } from '@/lib/supabase-sync/local-backup'
 import { loadUserDataFromCloud, pushLocalSnapshot } from '@/lib/supabase-sync/repository'
-import { resetAllStores } from '@/lib/supabase-sync/snapshot'
+import { hydrateAppSnapshot, resetAllStores } from '@/lib/supabase-sync/snapshot'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -27,6 +28,8 @@ interface AuthState {
   syncStatus: SyncStatus
   lastSyncedAt: string | null
   syncError: string | null
+  /** Save failures — app stays usable; banner shows this message */
+  saveError: string | null
 
   initialize: () => () => void
   signIn: (email: string, password: string) => Promise<void>
@@ -34,14 +37,18 @@ interface AuthState {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   syncNow: () => Promise<void>
+  flushPendingSave: () => Promise<void>
   reloadFromCloud: () => Promise<void>
   setSyncStatus: (status: SyncStatus, error?: string | null) => void
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let backupTimer: ReturnType<typeof setTimeout> | null = null
 let storeUnsubs: (() => void)[] = []
 let syncInFlight: Promise<void> | null = null
 let syncInFlightUserId: string | null = null
+let hydratedUserId: string | null = null
+let saveInFlight: Promise<void> | null = null
 
 function deferAuthSideEffect(fn: () => void): void {
   // Supabase auth deadlocks if you call the client from inside onAuthStateChange synchronously.
@@ -60,8 +67,17 @@ const SYNC_STORES = [
 function clearAutoSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = null
+  if (backupTimer) clearTimeout(backupTimer)
+  backupTimer = null
   for (const unsub of storeUnsubs) unsub()
   storeUnsubs = []
+}
+
+function scheduleLocalBackup(userId: string): void {
+  if (backupTimer) clearTimeout(backupTimer)
+  backupTimer = setTimeout(() => {
+    writeLocalBackup(userId)
+  }, 400)
 }
 
 function scheduleAutoSave(): void {
@@ -71,7 +87,15 @@ function scheduleAutoSave(): void {
   }, 2500)
 }
 
-async function runInitialSync(userId: string): Promise<void> {
+function shouldHydrateFromCloud(event: AuthChangeEvent): boolean {
+  return event === 'SIGNED_IN'
+}
+
+async function runInitialSync(userId: string, options?: { force?: boolean }): Promise<void> {
+  if (!options?.force && hydratedUserId === userId && useAuthStore.getState().dataReady) {
+    return
+  }
+
   if (syncInFlight && syncInFlightUserId === userId) {
     return syncInFlight
   }
@@ -79,21 +103,40 @@ async function runInitialSync(userId: string): Promise<void> {
   syncInFlightUserId = userId
   syncInFlight = (async () => {
     const { setSyncStatus } = useAuthStore.getState()
-    setSyncStatus('syncing')
-    useAuthStore.setState({ dataReady: false })
+    const alreadyReady = useAuthStore.getState().dataReady && hydratedUserId === userId
+    if (!alreadyReady) {
+      setSyncStatus('syncing')
+      useAuthStore.setState({ dataReady: false })
+    }
     try {
       const updatedAt = await loadUserDataFromCloud(userId)
+      hydratedUserId = userId
+      writeLocalBackup(userId)
       useAuthStore.setState({
         dataReady: true,
         syncStatus: 'synced',
         lastSyncedAt: updatedAt,
         syncError: null,
+        saveError: null,
       })
     } catch (e) {
-      resetAllStores()
       const raw = e instanceof Error ? e.message : 'Could not load practice data'
       if (import.meta.env.DEV) console.error('[sync load]', raw)
       const message = mapSyncError(raw)
+      const backup = readLocalBackup(userId)
+      if (backup) {
+        hydrateAppSnapshot(backup)
+        hydratedUserId = userId
+        useAuthStore.setState({
+          dataReady: true,
+          syncStatus: 'synced',
+          syncError: null,
+          saveError: message,
+        })
+        void useAuthStore.getState().flushPendingSave()
+        return
+      }
+      resetAllStores()
       useAuthStore.setState({ dataReady: false, syncStatus: 'error', syncError: message })
     }
   })()
@@ -108,8 +151,10 @@ async function runInitialSync(userId: string): Promise<void> {
   }
 }
 
-function handleSignedInUser(userId: string): void {
+function handleSignedInUser(userId: string, event: AuthChangeEvent | 'initial'): void {
   deferAuthSideEffect(() => {
+    const shouldLoad = event === 'initial' || shouldHydrateFromCloud(event as AuthChangeEvent)
+    if (!shouldLoad) return
     void runInitialSync(userId).then(() => {
       if (useAuthStore.getState().dataReady) {
         startAutoSave(userId)
@@ -125,6 +170,7 @@ function startAutoSave(userId: string): void {
       store.subscribe(() => {
         const { user, dataReady } = useAuthStore.getState()
         if (user?.id === userId && dataReady) {
+          scheduleLocalBackup(userId)
           scheduleAutoSave()
         }
       }),
@@ -140,37 +186,55 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   syncStatus: 'offline',
   lastSyncedAt: null,
   syncError: null,
+  saveError: null,
 
   setSyncStatus: (syncStatus, syncError = null) => set({ syncStatus, syncError }),
 
   initialize: () => {
-    resetAllStores()
-
     void supabase.auth.getSession().then(({ data: { session } }) => {
+      const prevUserId = get().user?.id ?? null
+      const nextUserId = session?.user?.id ?? null
+      if (prevUserId && prevUserId !== nextUserId) {
+        resetAllStores()
+        hydratedUserId = null
+      }
+
       set({ session, user: session?.user ?? null, loading: false })
       if (session?.user) {
-        handleSignedInUser(session.user.id)
+        handleSignedInUser(session.user.id, 'initial')
+      } else if (!nextUserId && !prevUserId) {
+        resetAllStores()
       }
     })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      const prevUserId = get().user?.id ?? null
+      const nextUserId = session?.user?.id ?? null
+
       set({ session, user: session?.user ?? null, loading: false })
 
       if (session?.user) {
-        // INITIAL_SESSION is handled by getSession above — avoid double sync on load.
-        if (event !== 'INITIAL_SESSION') {
-          handleSignedInUser(session.user.id)
+        if (prevUserId && prevUserId !== nextUserId) {
+          resetAllStores()
+          hydratedUserId = null
+        }
+        if (event === 'INITIAL_SESSION') return
+        if (shouldHydrateFromCloud(event)) {
+          handleSignedInUser(session.user.id, event)
         }
       } else {
         clearAutoSave()
+        clearLocalBackup()
         resetAllStores()
+        hydratedUserId = null
         set({
           dataReady: false,
           syncStatus: 'offline',
           lastSyncedAt: null,
           syncError: null,
+          saveError: null,
         })
       }
     })
@@ -182,7 +246,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signIn: async (email, password) => {
-    set({ syncError: null })
+    set({ syncError: null, saveError: null })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       const message = mapAuthErr(error)
@@ -193,7 +257,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signUp: async (email, password) => {
-    set({ syncError: null })
+    set({ syncError: null, saveError: null })
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -204,7 +268,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ syncStatus: 'error', syncError: message })
       throw new Error(message)
     }
-    // Supabase returns empty identities when email already exists (anti-enumeration).
     if (data.user && data.user.identities?.length === 0) {
       set({ syncStatus: 'offline' })
       throw new Error(AUTH_ACCOUNT_EXISTS)
@@ -228,8 +291,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
+    await get().flushPendingSave()
     clearAutoSave()
+    clearLocalBackup()
     resetAllStores()
+    hydratedUserId = null
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     set({
@@ -237,27 +303,52 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       syncStatus: 'offline',
       lastSyncedAt: null,
       syncError: null,
+      saveError: null,
     })
   },
 
   syncNow: async () => {
     const userId = get().user?.id
     if (!userId || !get().dataReady) return
+    if (saveInFlight) return saveInFlight
+
+    saveInFlight = (async () => {
+      try {
+        const updatedAt = await pushLocalSnapshot(userId)
+        writeLocalBackup(userId)
+        set({ syncStatus: 'synced', lastSyncedAt: updatedAt, saveError: null })
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : 'Save failed'
+        if (import.meta.env.DEV) console.error('[sync save]', raw)
+        const message = mapSaveError(raw)
+        writeLocalBackup(userId)
+        set({ saveError: message })
+      }
+    })()
+
     try {
-      const updatedAt = await pushLocalSnapshot(userId)
-      set({ syncStatus: 'synced', lastSyncedAt: updatedAt, syncError: null })
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : 'Save failed'
-      if (import.meta.env.DEV) console.error('[sync save]', raw)
-      const message = mapSaveError(raw)
-      set({ syncStatus: 'error', syncError: message })
+      await saveInFlight
+    } finally {
+      saveInFlight = null
     }
+  },
+
+  flushPendingSave: async () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    const userId = get().user?.id
+    if (userId) writeLocalBackup(userId)
+    await get().syncNow()
   },
 
   reloadFromCloud: async () => {
     const userId = get().user?.id
     if (!userId) return
-    await runInitialSync(userId)
+    await get().flushPendingSave()
+    hydratedUserId = null
+    await runInitialSync(userId, { force: true })
     if (useAuthStore.getState().dataReady) {
       startAutoSave(userId)
     }

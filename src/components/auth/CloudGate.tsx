@@ -61,11 +61,7 @@ export function CloudGate({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!dataReady) {
-    return <GateLoading message="Loading your practice plan…" />
-  }
-
-  if (syncStatus === 'error') {
+  if (!dataReady && syncStatus === 'error') {
     return (
       <div className="flex min-h-full items-center justify-center bg-background p-6">
         <Card className="w-full max-w-md border-warning/50 bg-warning/5">
@@ -110,6 +106,10 @@ export function CloudGate({ children }: { children: React.ReactNode }) {
         </Card>
       </div>
     )
+  }
+
+  if (!dataReady) {
+    return <GateLoading message="Loading your practice plan…" />
   }
 
   return children
