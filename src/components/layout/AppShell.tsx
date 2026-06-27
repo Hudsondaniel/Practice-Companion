@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { CloudGate } from '@/components/auth/CloudGate'
@@ -10,8 +11,10 @@ import { PracticeToolsPanel } from '@/components/practice-tools/PracticeToolsPan
 import { GuidedSession } from '@/components/practice/GuidedSession'
 import { SessionResumeBar } from '@/components/practice/SessionResumeBar'
 import { useSessionLifecycle } from '@/hooks/use-session-lifecycle'
+import { registerGuidedStage } from '@/lib/guided-fullscreen'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { resolveTheme, useUIStore } from '@/stores/ui-store'
+import { cn } from '@/lib/utils'
 
 function toastStyle() {
   const isLight = resolveTheme(useUIStore.getState().theme) === 'light'
@@ -24,22 +27,32 @@ function toastStyle() {
 
 export function AppShell() {
   const isGuidedActive = useGuidedSessionStore((s) => s.isActive)
+  const guidedImmersive = useUIStore((s) => s.guidedImmersive)
   const theme = useUIStore((s) => s.theme)
+  const guidedStageRef = useRef<HTMLDivElement>(null)
   useSessionLifecycle()
+
+  useEffect(() => {
+    registerGuidedStage(guidedStageRef.current)
+    return () => registerGuidedStage(null)
+  })
 
   return (
     <CloudGate>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-        <DatabaseStatusBanner />
-        <SessionResumeBar />
+        {!guidedImmersive && <DatabaseStatusBanner />}
+        {!isGuidedActive && <SessionResumeBar />}
         {isGuidedActive ? (
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <Sidebar className="hidden lg:flex" />
-            <div className="flex min-w-0 flex-1 overflow-hidden">
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                <GuidedSession onComplete={() => {}} />
-              </div>
-              <PracticeToolsPanel className="hidden xl:flex" />
+            {!guidedImmersive && <Sidebar className="hidden lg:flex" />}
+            <div
+              ref={guidedStageRef}
+              className={cn(
+                'flex min-w-0 flex-1 flex-col overflow-hidden bg-background',
+                guidedImmersive && 'fixed inset-0 z-50',
+              )}
+            >
+              <GuidedSession onComplete={() => {}} />
             </div>
           </div>
         ) : (

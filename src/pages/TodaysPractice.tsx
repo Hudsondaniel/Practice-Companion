@@ -107,11 +107,6 @@ export function TodaysPractice() {
 
       if (!fresh && pausedSession) {
         resumeSession()
-        try {
-          await document.documentElement.requestFullscreen()
-        } catch {
-          toast('Fullscreen unavailable. Session resumed in windowed mode.')
-        }
         toast.success(`Resumed at phase ${phaseIndex + 1} of ${phases.length}`)
         return
       }
@@ -151,13 +146,6 @@ export function TodaysPractice() {
 
       startSession(generatedPhases, { fresh: true })
       startSessionLog(`session-${Date.now()}`, new Date().toISOString().split('T')[0]!)
-
-      try {
-        await document.documentElement.requestFullscreen()
-      } catch {
-        toast('Fullscreen unavailable. Session started in windowed mode.')
-      }
-
       toast.success('Guided session started')
     },
     [

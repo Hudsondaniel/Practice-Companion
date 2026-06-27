@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { enterGuidedFocusMode, exitGuidedFocusModeIfActive } from '@/lib/guided-fullscreen'
 import type { GuidedPhase } from '@/types/practice-method'
 import { useStreakStore } from '@/stores/streak-store'
 
@@ -139,6 +140,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
       frozenByBackground: false,
     })
     logPracticeDayIfNeeded()
+    void enterGuidedFocusMode()
   },
 
   resumeSession: () => {
@@ -161,6 +163,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
       ...run,
     })
     logPracticeDayIfNeeded()
+    void enterGuidedFocusMode()
   },
 
   pauseSession: () => {
@@ -184,12 +187,11 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
     if (get().getDailyElapsedSeconds() > 0) {
       logPracticeDayIfNeeded()
     }
+    void exitGuidedFocusModeIfActive()
   },
 
   endSession: () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => {})
-    }
+    exitGuidedFocusModeIfActive()
     set({
       isActive: false,
       isPausedForDay: false,
@@ -211,9 +213,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
   },
 
   finishDaySession: () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => {})
-    }
+    exitGuidedFocusModeIfActive()
     const { accumulatedSeconds, segmentStartedAt, isActive } = get()
     const total =
       accumulatedSeconds + (isActive ? segmentElapsedSeconds(segmentStartedAt) : 0)

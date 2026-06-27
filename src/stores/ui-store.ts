@@ -11,6 +11,8 @@ interface UIState {
   guidedRightPanelOpen: boolean
   guidedLeftPanelWidth: number
   guidedRightPanelWidth: number
+  /** Session focus mode — fullscreen or entering fullscreen */
+  guidedImmersive: boolean
   theme: Theme
 
   toggleSidebar: () => void
@@ -25,6 +27,7 @@ interface UIState {
   setGuidedRightPanelOpen: (open: boolean) => void
   setGuidedLeftPanelWidth: (width: number) => void
   setGuidedRightPanelWidth: (width: number) => void
+  setGuidedImmersive: (immersive: boolean) => void
   setTheme: (theme: Theme) => void
 }
 
@@ -34,10 +37,11 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       mobileNavOpen: false,
       practiceToolsOpen: false,
-      guidedLeftPanelOpen: true,
-      guidedRightPanelOpen: true,
+      guidedLeftPanelOpen: false,
+      guidedRightPanelOpen: false,
       guidedLeftPanelWidth: 220,
       guidedRightPanelWidth: 360,
+      guidedImmersive: false,
       theme: 'dark',
 
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -52,9 +56,10 @@ export const useUIStore = create<UIState>()(
       setGuidedRightPanelOpen: (open) => set({ guidedRightPanelOpen: open }),
       setGuidedLeftPanelWidth: (width) => set({ guidedLeftPanelWidth: width }),
       setGuidedRightPanelWidth: (width) => set({ guidedRightPanelWidth: width }),
+      setGuidedImmersive: (immersive) => set({ guidedImmersive: immersive }),
       setTheme: (theme) => set({ theme }),
     }),
-    { name: 'piano-mastery-ui' },
+    { name: 'piano-mastery-ui', partialize: ({ guidedImmersive: _, ...state }) => state },
   ),
 )
 

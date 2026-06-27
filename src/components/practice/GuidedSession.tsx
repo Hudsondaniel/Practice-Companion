@@ -25,7 +25,9 @@ import { MonthlyTranscriptionSectionCapture } from '@/components/transcription/M
 import { TranscriptionStagePanel } from '@/components/transcription/TranscriptionStagePanel'
 import { PracticeToolsContent } from '@/components/practice-tools/PracticeToolsContent'
 import { useGuidedPanelLayout } from '@/hooks/use-guided-panel-layout'
+import { useGuidedFullscreen } from '@/hooks/use-guided-fullscreen'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { toggleGuidedFocusMode } from '@/lib/guided-fullscreen'
 import { formatTime } from '@/lib/utils'
 import {
   activeStepIndexFromElapsed,
@@ -77,7 +79,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   const logSkippedPhases = useAdherenceStore((s) => s.logSkippedPhases)
   const finishSession = useAdherenceStore((s) => s.finishSession)
   const markPhaseStarted = useAdherenceStore((s) => s.markPhaseStarted)
-  const { guidedLeftPanelOpen, guidedRightPanelOpen, toggleGuidedLeftPanel, toggleGuidedRightPanel, guidedLeftPanelWidth, guidedRightPanelWidth, setGuidedLeftPanelWidth, setGuidedRightPanelWidth, setGuidedLeftPanelOpen, setGuidedRightPanelOpen } =
+  const { guidedLeftPanelOpen, guidedRightPanelOpen, toggleGuidedLeftPanel, toggleGuidedRightPanel, guidedLeftPanelWidth, guidedRightPanelWidth, setGuidedLeftPanelWidth, setGuidedRightPanelWidth, setGuidedLeftPanelOpen, setGuidedRightPanelOpen, guidedImmersive } =
     useUIStore()
 
   const isDesktop = useMediaQuery('(min-width: 1024px)')
@@ -99,13 +101,12 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   })
   const recordPracticeDay = useStreakStore((s) => s.recordPracticeDay)
 
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const isFullscreen = useGuidedFullscreen()
+  const immersive = guidedImmersive
   const [checkpointAnswer, setCheckpointAnswer] = useState('')
   const [clarityRating, setClarityRating] = useState<number | null>(null)
   const [automaticityChecked, setAutomaticityChecked] = useState<Record<string, boolean>>({})
   const [, setTick] = useState(0)
-  const sessionRef = useRef<HTMLDivElement>(null)
-  const panelsBeforeFullscreen = useRef<{ left: boolean; right: boolean } | null>(null)
 
   const phase = phases[phaseIndex]
   const secondsRemaining = getSecondsRemaining()
@@ -186,21 +187,6 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
     return () => clearInterval(interval)
   }, [tickTimer])
 
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      const root = sessionRef.current
-      const active = Boolean(root && document.fullscreenElement === root)
-      setIsFullscreen(active)
-      if (!active && panelsBeforeFullscreen.current) {
-        setGuidedLeftPanelOpen(panelsBeforeFullscreen.current.left)
-        setGuidedRightPanelOpen(panelsBeforeFullscreen.current.right)
-        panelsBeforeFullscreen.current = null
-      }
-    }
-    document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
-  }, [setGuidedLeftPanelOpen, setGuidedRightPanelOpen])
-
   const phaseCompleteNotified = useRef(false)
 
   useEffect(() => {
@@ -216,22 +202,12 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   }, [secondsRemaining, phase, isPaused])
 
   const toggleFullscreen = useCallback(async () => {
-    const root = sessionRef.current
-    if (!root) return
-
-    if (document.fullscreenElement === root) {
-      await document.exitFullscreen()
-      return
+    try {
+      await toggleGuidedFocusMode()
+    } catch {
+      toast('Could not toggle focus mode.')
     }
-
-    panelsBeforeFullscreen.current = {
-      left: guidedLeftPanelOpen,
-      right: guidedRightPanelOpen,
-    }
-    setGuidedLeftPanelOpen(false)
-    setGuidedRightPanelOpen(false)
-    await root.requestFullscreen()
-  }, [guidedLeftPanelOpen, guidedRightPanelOpen, setGuidedLeftPanelOpen, setGuidedRightPanelOpen])
+  }, [])
 
   const markBlockCompleteIfNeeded = useCallback(
     (completedPhaseIndex: number) => {
@@ -359,7 +335,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
   if (!phase) return null
 
   return (
-    <div ref={sessionRef} className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 md:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={toggleGuidedLeftPanel}>
@@ -392,7 +368,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {(!isFullscreen || guidedLeftPanelOpen) && (
+        {(!immersive || guidedLeftPanelOpen) && (
           <ResizablePanel
             side="left"
             open={guidedLeftPanelOpen}
@@ -401,6 +377,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
             onWidthChange={setLeftWidthClamped}
             onToggle={toggleGuidedLeftPanel}
             overlayTitle="Session map"
+            hideWhenClosed={immersive}
           >
             <PhaseSidebar phases={phases} phaseIndex={phaseIndex} onSelectPhase={handleNavigatePhase} />
           </ResizablePanel>
@@ -548,7 +525,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
           </AnimatePresence>
         </main>
 
-        {(!isFullscreen || guidedRightPanelOpen) && (
+        {(!immersive || guidedRightPanelOpen) && (
           <ResizablePanel
             side="right"
             open={guidedRightPanelOpen}
@@ -557,6 +534,7 @@ export function GuidedSession({ onComplete }: GuidedSessionProps) {
             onWidthChange={setRightWidthClamped}
             onToggle={toggleGuidedRightPanel}
             overlayTitle="Practice tools"
+            hideWhenClosed={immersive}
           >
             <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-sidebar/40 px-4 py-4 scrollbar-thin">
               <PracticeToolsContent variant="panel" phaseId={phase.id} phaseTitle={phase.title} />

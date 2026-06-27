@@ -17,6 +17,8 @@ interface ResizablePanelProps {
   children: React.ReactNode
   className?: string
   overlayTitle?: string
+  /** When closed, render nothing instead of a collapsed rail */
+  hideWhenClosed?: boolean
 }
 
 export function ResizablePanel({
@@ -30,6 +32,7 @@ export function ResizablePanel({
   children,
   className,
   overlayTitle,
+  hideWhenClosed = false,
 }: ResizablePanelProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const dragging = useRef(false)
@@ -103,6 +106,8 @@ export function ResizablePanel({
   }
 
   if (!open) {
+    if (hideWhenClosed) return null
+
     return (
       <aside
         style={{ width: COLLAPSED_WIDTH, minWidth: COLLAPSED_WIDTH, maxWidth: COLLAPSED_WIDTH }}
