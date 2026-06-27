@@ -10,6 +10,8 @@ interface AdherenceState {
   history: SessionAdherenceSummary[]
 
   startSessionLog: (sessionId: string, date: string) => void
+  /** Start a session log for today if none is active (e.g. after resume). */
+  ensureSessionLog: (date: string) => void
   markPhaseStarted: () => void
   logPhaseCompletion: (
     entry: Omit<PhaseCompletionLog, 'actualSeconds' | 'completedAt' | 'status' | 'sessionDate'>,
@@ -73,6 +75,17 @@ export const useAdherenceStore = create<AdherenceState>()((set, get) => ({
       startSessionLog: (sessionId, date) => {
         set({
           currentSessionId: sessionId,
+          currentSessionDate: date,
+          logs: [],
+          phaseStartedAt: Date.now(),
+        })
+      },
+
+      ensureSessionLog: (date) => {
+        const { currentSessionId, currentSessionDate } = get()
+        if (currentSessionId && currentSessionDate === date) return
+        set({
+          currentSessionId: `session-${Date.now()}`,
           currentSessionDate: date,
           logs: [],
           phaseStartedAt: Date.now(),

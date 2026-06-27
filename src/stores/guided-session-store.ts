@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import { enterGuidedFocusMode, exitGuidedFocusModeIfActive } from '@/lib/guided-fullscreen'
 import type { GuidedPhase } from '@/types/practice-method'
+import { useAdherenceStore } from '@/stores/adherence-store'
+import { usePracticeStore } from '@/stores/practice-store'
 import { useStreakStore } from '@/stores/streak-store'
+
+export type StartSessionResult = 'started' | 'resumed' | 'day-complete'
 
 interface GuidedSessionState {
   isActive: boolean
@@ -12,7 +16,6 @@ interface GuidedSessionState {
   phaseIndex: number
   isPaused: boolean
   pausedRemainingSeconds: number
-  /** When running: wall-clock anchor for phase countdown */
   phaseRunStartedAt: number | null
   phaseRunBudgetSeconds: number
   startedAt: string | null
@@ -20,11 +23,10 @@ interface GuidedSessionState {
   segmentStartedAt: string | null
   lastPeakBpm: number | null
   completedStepKeys: string[]
-  /** Manual step override within current phase (null = follow timer) */
   manualStepIndex: number | null
   frozenByBackground: boolean
 
-  startSession: (phases: GuidedPhase[], options?: { fresh?: boolean }) => void
+  startSession: (phases: GuidedPhase[], options?: { forceFresh?: boolean }) => StartSessionResult
   resumeSession: () => void
   pauseSession: () => void
   endSession: () => void
@@ -69,6 +71,23 @@ function segmentElapsedSeconds(segmentStartedAt: string | null): number {
 
 function logPracticeDayIfNeeded(): void {
   useStreakStore.getState().recordPracticeDay(todayIso())
+}
+
+function markTodaySessionComplete(): void {
+  const today = todayIso()
+  const session = usePracticeStore.getState().todaySession
+  if (!session || session.date !== today) return
+  usePracticeStore.setState({
+    todaySession: {
+      ...session,
+      completed: true,
+    },
+    currentBlockId: null,
+  })
+}
+
+function ensureAdherenceLog(): void {
+  useAdherenceStore.getState().ensureSessionLog(todayIso())
 }
 
 function beginPhaseRun(remainingSeconds: number): {
@@ -116,9 +135,27 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
     const today = todayIso()
     const state = get()
 
-    if (!options?.fresh && state.canResumeToday()) {
+    if (state.isDayCompleteForToday() && !options?.forceFresh) {
+      return 'day-complete'
+    }
+
+    if (!options?.forceFresh && state.canResumeToday()) {
       get().resumeSession()
-      return
+      return 'resumed'
+    }
+
+    if (
+      !options?.forceFresh &&
+      state.sessionDate === today &&
+      state.phases.length > 0 &&
+      !state.dayCompleted
+    ) {
+      get().resumeSession()
+      return 'resumed'
+    }
+
+    if (!options?.forceFresh && state.sessionDate === today && state.dayCompleted) {
+      return 'day-complete'
     }
 
     const duration = phaseDurationSeconds(phases[0])
@@ -140,7 +177,9 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
       frozenByBackground: false,
     })
     logPracticeDayIfNeeded()
+    ensureAdherenceLog()
     void enterGuidedFocusMode()
+    return 'started'
   },
 
   resumeSession: () => {
@@ -158,11 +197,11 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
       isPausedForDay: false,
       sessionDate: todayIso(),
       segmentStartedAt: new Date().toISOString(),
-      manualStepIndex: null,
       frozenByBackground: false,
       ...run,
     })
     logPracticeDayIfNeeded()
+    ensureAdherenceLog()
     void enterGuidedFocusMode()
   },
 
@@ -235,12 +274,15 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
       manualStepIndex: null,
       frozenByBackground: false,
     })
+    markTodaySessionComplete()
     logPracticeDayIfNeeded()
   },
 
   isDayCompleteForToday: () => {
     const { dayCompleted, sessionDate } = get()
-    return dayCompleted && sessionDate === todayIso()
+    if (dayCompleted && sessionDate === todayIso()) return true
+    const todaySession = usePracticeStore.getState().todaySession
+    return todaySession?.date === todayIso() && todaySession.completed
   },
 
   getDailyElapsedSeconds: () => {
@@ -388,6 +430,5 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
   reconcileAfterBackground: () => {
     const { frozenByBackground, isActive, isPaused } = get()
     if (!isActive || !frozenByBackground || !isPaused) return
-    // Remain paused with frozen remaining — user taps Resume to continue.
   },
 }))

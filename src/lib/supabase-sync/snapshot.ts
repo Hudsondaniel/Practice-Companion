@@ -75,25 +75,29 @@ export function collectAppSnapshot(): AppSnapshot {
   const tools = useSessionToolsStore.getState()
   const guided = useGuidedSessionStore.getState()
 
-  const guidedSession =
-    guided.sessionDate && guided.phases.length > 0
-      ? {
-          isActive: guided.isActive,
-          isPausedForDay: guided.isPausedForDay,
-          isPaused: guided.isPaused,
-          dayCompleted: guided.dayCompleted,
-          sessionDate: guided.sessionDate,
-          phases: guided.phases,
-          phaseIndex: guided.phaseIndex,
-          pausedRemainingSeconds: guided.getSecondsRemaining(),
-          phaseRunBudgetSeconds: guided.phaseRunBudgetSeconds,
-          accumulatedSeconds: guided.accumulatedSeconds,
-          startedAt: guided.startedAt,
-          segmentStartedAt: guided.segmentStartedAt,
-          completedStepKeys: guided.completedStepKeys,
-          manualStepIndex: guided.manualStepIndex,
-        }
-      : null
+  const guidedSession = (() => {
+    if (!guided.sessionDate) return null
+    const hasSavedState =
+      guided.phases.length > 0 || guided.dayCompleted || guided.isPausedForDay
+    if (!hasSavedState) return null
+    return {
+      isActive: guided.isActive,
+      isPausedForDay: guided.isPausedForDay,
+      isPaused: guided.isPaused,
+      dayCompleted: guided.dayCompleted,
+      sessionDate: guided.sessionDate,
+      phases: guided.phases,
+      phaseIndex: guided.phaseIndex,
+      pausedRemainingSeconds:
+        guided.phases.length > 0 ? guided.getSecondsRemaining() : guided.pausedRemainingSeconds,
+      phaseRunBudgetSeconds: guided.phaseRunBudgetSeconds,
+      accumulatedSeconds: guided.accumulatedSeconds,
+      startedAt: guided.startedAt,
+      segmentStartedAt: guided.segmentStartedAt,
+      completedStepKeys: guided.completedStepKeys,
+      manualStepIndex: guided.manualStepIndex,
+    }
+  })()
 
   return {
     version: APP_SNAPSHOT_VERSION,
@@ -202,32 +206,78 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
   if (snapshot.guidedSession) {
     const g = snapshot.guidedSession
     const today = todayIso()
-    const inProgress =
-      g.sessionDate === today && !g.dayCompleted && (g.phases as GuidedPhase[]).length > 0
-    const pausedForDay = g.isPausedForDay ?? !inProgress
-    const remaining =
-      typeof g.pausedRemainingSeconds === 'number'
-        ? g.pausedRemainingSeconds
-        : phaseDurationFromPhases(g.phases as GuidedPhase[], g.phaseIndex)
-    const midSession = inProgress && !pausedForDay
 
+    if (g.sessionDate === today && g.dayCompleted) {
+      useGuidedSessionStore.setState({
+        isActive: false,
+        isPausedForDay: false,
+        dayCompleted: true,
+        sessionDate: g.sessionDate,
+        phases: [],
+        phaseIndex: 0,
+        isPaused: true,
+        pausedRemainingSeconds: 0,
+        phaseRunStartedAt: null,
+        phaseRunBudgetSeconds: 0,
+        startedAt: g.startedAt ?? null,
+        accumulatedSeconds: g.accumulatedSeconds ?? 0,
+        segmentStartedAt: null,
+        lastPeakBpm: null,
+        completedStepKeys: g.completedStepKeys ?? [],
+        manualStepIndex: null,
+        frozenByBackground: false,
+      })
+    } else {
+      const inProgress =
+        g.sessionDate === today && !g.dayCompleted && (g.phases as GuidedPhase[]).length > 0
+      const pausedForDay = g.isPausedForDay ?? !inProgress
+      const remaining =
+        typeof g.pausedRemainingSeconds === 'number'
+          ? g.pausedRemainingSeconds
+          : phaseDurationFromPhases(g.phases as GuidedPhase[], g.phaseIndex)
+      const midSession = inProgress && !pausedForDay
+
+      useGuidedSessionStore.setState({
+        isActive: midSession,
+        isPausedForDay: pausedForDay,
+        dayCompleted: g.dayCompleted ?? false,
+        sessionDate: g.sessionDate,
+        phases: g.phases as GuidedPhase[],
+        phaseIndex: g.phaseIndex ?? 0,
+        isPaused: midSession ? (g.isPaused ?? true) : true,
+        pausedRemainingSeconds: remaining,
+        phaseRunStartedAt: null,
+        phaseRunBudgetSeconds: g.phaseRunBudgetSeconds ?? remaining,
+        startedAt: g.startedAt ?? null,
+        accumulatedSeconds: g.accumulatedSeconds ?? 0,
+        segmentStartedAt: midSession && !(g.isPaused ?? true) ? (g.segmentStartedAt ?? null) : null,
+        lastPeakBpm: null,
+        completedStepKeys: g.completedStepKeys ?? [],
+        manualStepIndex: g.manualStepIndex ?? null,
+        frozenByBackground: false,
+      })
+    }
+  } else if (
+    snapshot.practice.todaySession?.date === todayIso() &&
+    snapshot.practice.todaySession.completed
+  ) {
     useGuidedSessionStore.setState({
-      isActive: midSession,
-      isPausedForDay: pausedForDay,
-      dayCompleted: g.dayCompleted ?? false,
-      sessionDate: g.sessionDate,
-      phases: g.phases as GuidedPhase[],
-      phaseIndex: g.phaseIndex ?? 0,
-      isPaused: midSession ? (g.isPaused ?? true) : true,
-      pausedRemainingSeconds: remaining,
+      isActive: false,
+      isPausedForDay: false,
+      dayCompleted: true,
+      sessionDate: todayIso(),
+      phases: [],
+      phaseIndex: 0,
+      isPaused: true,
+      pausedRemainingSeconds: 0,
       phaseRunStartedAt: null,
-      phaseRunBudgetSeconds: g.phaseRunBudgetSeconds ?? remaining,
-      startedAt: g.startedAt ?? null,
-      accumulatedSeconds: g.accumulatedSeconds ?? 0,
-      segmentStartedAt: midSession && !(g.isPaused ?? true) ? (g.segmentStartedAt ?? null) : null,
+      phaseRunBudgetSeconds: 0,
+      startedAt: null,
+      accumulatedSeconds: 0,
+      segmentStartedAt: null,
       lastPeakBpm: null,
-      completedStepKeys: g.completedStepKeys ?? [],
-      manualStepIndex: g.manualStepIndex ?? null,
+      completedStepKeys: [],
+      manualStepIndex: null,
       frozenByBackground: false,
     })
   } else {
@@ -255,7 +305,8 @@ export function snapshotIsEmpty(snapshot: AppSnapshot): boolean {
     snapshot.transcriptions.projects.length === 0 &&
     snapshot.adherence.history.length === 0 &&
     snapshot.streak.practiceDays.length === 0 &&
-    !snapshot.guidedSession
+    !snapshot.guidedSession &&
+    !snapshot.practice.todaySession?.completed
   )
 }
 

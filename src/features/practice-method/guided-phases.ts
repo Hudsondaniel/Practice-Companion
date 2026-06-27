@@ -110,11 +110,13 @@ function injectTensionChecks(phases: GuidedPhase[]): GuidedPhase[] {
   let workMinutes = 0
   let added = false
 
-  for (const phase of phases) {
+  for (let i = 0; i < phases.length; i += 1) {
+    const phase = phases[i]!
     result.push(phase)
     if (phase.isRecovery) continue
     workMinutes += phase.durationMinutes
-    if (!added && workMinutes >= 55) {
+    const nextIsRecovery = phases[i + 1]?.isRecovery
+    if (!added && workMinutes >= 55 && !nextIsRecovery) {
       result.push(tensionCheckPhase('tension-mid'))
       added = true
       workMinutes = 0

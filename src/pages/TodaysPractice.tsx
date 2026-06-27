@@ -24,6 +24,7 @@ import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
+import { useIsDayCompleteForToday } from '@/hooks/use-is-day-complete'
 
 export function TodaysPractice() {
   const scheduledDayType = getDayType()
@@ -51,11 +52,12 @@ export function TodaysPractice() {
   const phaseIndex = useGuidedSessionStore((s) => s.phaseIndex)
   const startSession = useGuidedSessionStore((s) => s.startSession)
   const resumeSession = useGuidedSessionStore((s) => s.resumeSession)
-  const isDayCompleteForToday = useGuidedSessionStore((s) => s.isDayCompleteForToday())
+  const hasRecoverableSession = useGuidedSessionStore((s) => s.hasRecoverableSession)
+  const isDayCompleteForToday = useIsDayCompleteForToday()
 
   const today = new Date().toISOString().split('T')[0]!
   const pausedSession = isPausedForDay && sessionDate === today && phases.length > 0
-  const startSessionLog = useAdherenceStore((s) => s.startSessionLog)
+  const ensureSessionLog = useAdherenceStore((s) => s.ensureSessionLog)
   const monthConfigured = isMonthConfigured(currentMonthYear())
   const transcriptionProjects = useTranscriptionStore((s) => s.projects)
 
@@ -91,7 +93,7 @@ export function TodaysPractice() {
   const nextPractice = isRestDay ? getNextPracticeDate(practiceSchedule) : null
 
   const startGuidedSession = useCallback(
-    async (fresh = false) => {
+    async (intent: 'continue' | 'fresh' = 'continue') => {
       if (!dayType) {
         toast.error('Today is a rest day — tap Practice anyway first')
         return
@@ -105,8 +107,22 @@ export function TodaysPractice() {
         return
       }
 
-      if (!fresh && pausedSession) {
+      if (isDayCompleteForToday) {
+        toast.error('You already finished today. Your progress is saved until your next practice day.')
+        return
+      }
+
+      if (intent === 'fresh') {
+        if (
+          !window.confirm(
+            'Start over from phase 1? Your in-progress guided session will reset. Block progress on the dashboard is kept unless you use Reset there.',
+          )
+        ) {
+          return
+        }
+      } else if (pausedSession) {
         resumeSession()
+        ensureSessionLog(today)
         toast.success(`Resumed at phase ${phaseIndex + 1} of ${phases.length}`)
         return
       }
@@ -144,9 +160,23 @@ export function TodaysPractice() {
       const firstBlock = generatedPhases.find((p) => !p.isRecovery)
       if (firstBlock) setCurrentBlock(firstBlock.blockId)
 
-      startSession(generatedPhases, { fresh: true })
-      startSessionLog(`session-${Date.now()}`, new Date().toISOString().split('T')[0]!)
-      toast.success('Guided session started')
+      const result = startSession(generatedPhases, { forceFresh: intent === 'fresh' })
+      if (result === 'day-complete') {
+        toast.error('You already finished today.')
+        return
+      }
+      if (result === 'resumed') {
+        ensureSessionLog(today)
+        toast.success(`Resumed at phase ${phaseIndex + 1} of ${phases.length}`)
+        return
+      }
+
+      if (intent === 'fresh' || !hasRecoverableSession()) {
+        useAdherenceStore.getState().startSessionLog(`session-${Date.now()}`, today)
+      } else {
+        ensureSessionLog(today)
+      }
+      toast.success(intent === 'fresh' ? 'New guided session started' : 'Guided session started')
     },
     [
       activeConcept,
@@ -159,10 +189,12 @@ export function TodaysPractice() {
       pausedSession,
       phaseIndex,
       phases.length,
+      hasRecoverableSession,
+      ensureSessionLog,
+      isDayCompleteForToday,
       setCurrentBlock,
       startSession,
       resumeSession,
-      startSessionLog,
       today,
     ],
   )
@@ -261,11 +293,11 @@ export function TodaysPractice() {
                     Phase {phaseIndex + 1} of {phases.length} · pick up where you left off
                   </p>
                   <div className="mt-3 flex justify-center gap-2">
-                    <Button size="sm" onClick={() => void startGuidedSession(false)}>
+                    <Button size="sm" onClick={() => void startGuidedSession('continue')}>
                       <Play className="h-3 w-3" />
                       Resume Session
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => void startGuidedSession(true)}>
+                    <Button size="sm" variant="outline" onClick={() => void startGuidedSession('fresh')}>
                       Start Fresh
                     </Button>
                   </div>
@@ -292,7 +324,7 @@ export function TodaysPractice() {
               <Button
                 size="lg"
                 className="gap-2 px-8 text-base"
-                onClick={() => void startGuidedSession(pausedSession)}
+                onClick={() => void startGuidedSession('continue')}
                 disabled={!monthConfigured || isDayCompleteForToday}
               >
                 <Maximize2 className="h-5 w-5" />
@@ -305,7 +337,7 @@ export function TodaysPractice() {
             </CardContent>
           </Card>
 
-          {todaySession && completedCount > 0 && (
+          {todaySession && completedCount > 0 && !isDayCompleteForToday && (
             <Card>
               <CardContent className="pt-6">
                 <div className="mb-2 flex justify-between text-sm">
@@ -315,21 +347,32 @@ export function TodaysPractice() {
                   </span>
                 </div>
                 <Progress value={progress} />
-                <div className="mt-4 flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void startGuidedSession()}>
-                    <Play className="h-3 w-3" />
-                    Resume Session
-                  </Button>
+                {pausedSession && (
+                  <div className="mt-4 flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void startGuidedSession('continue')}>
+                      <Play className="h-3 w-3" />
+                      Resume Session
+                    </Button>
+                  </div>
+                )}
+                <div className={`flex gap-2 ${pausedSession ? 'mt-2' : 'mt-4'}`}>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
+                      if (
+                        !window.confirm(
+                          'Reset today\'s block checklist? This does not erase adherence history from completed sessions.',
+                        )
+                      ) {
+                        return
+                      }
                       initTodaySession(dayType)
-                      toast.success('Session reset')
+                      toast.success('Block checklist reset')
                     }}
                   >
                     <RotateCcw className="h-3 w-3" />
-                    Reset
+                    Reset checklist
                   </Button>
                 </div>
               </CardContent>

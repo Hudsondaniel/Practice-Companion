@@ -72,4 +72,21 @@ describe('generateGuidedPhases', () => {
 
     expect(phases.some((p) => p.id === 'vocabulary-lab')).toBe(false)
   })
+
+  it('does not stack body reset immediately before mid-session reset', () => {
+    const phases = generateGuidedPhases({
+      dayType: 'identity',
+      activeConcept: mockConcept,
+      monthlyTunes: [{ id: 't1', title: 'Tune A', type: 'standard', key: 'C', deploymentPoints: [], monthYear: '2026-06' }],
+      deviceBacklog: mockBacklog,
+      transcriptionProject: 'Artist — Tune',
+      date: new Date('2026-06-16T12:00:00'),
+    })
+
+    const midIdx = phases.findIndex((p) => p.title === 'Reset: Mid-Session')
+    expect(midIdx).toBeGreaterThan(-1)
+    if (midIdx > 0) {
+      expect(phases[midIdx - 1]?.title).not.toBe('Body Reset')
+    }
+  })
 })
