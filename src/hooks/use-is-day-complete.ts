@@ -1,8 +1,9 @@
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
+import { localDateIso } from '@/lib/local-date'
 
 function todayIso(): string {
-  return new Date().toISOString().split('T')[0]!
+  return localDateIso()
 }
 
 /** Reactive check — subscribes to both guided session and todaySession.completed. */

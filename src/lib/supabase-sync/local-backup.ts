@@ -6,6 +6,7 @@ import {
 } from '@/lib/supabase-sync/snapshot'
 
 const STORAGE_KEY = 'pc-app-snapshot-backup'
+const LEGACY_SESSION_KEY = 'pc-app-snapshot-backup'
 
 interface BackupEnvelope {
   userId: string
@@ -13,9 +14,21 @@ interface BackupEnvelope {
   snapshot: AppSnapshot
 }
 
-function readEnvelope(): BackupEnvelope | null {
+function migrateLegacySessionBackup(): void {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
+    const legacy = sessionStorage.getItem(LEGACY_SESSION_KEY)
+    if (!legacy || localStorage.getItem(STORAGE_KEY)) return
+    localStorage.setItem(STORAGE_KEY, legacy)
+    sessionStorage.removeItem(LEGACY_SESSION_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+function readEnvelope(): BackupEnvelope | null {
+  migrateLegacySessionBackup()
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as BackupEnvelope
     if (!parsed?.userId || !parsed.snapshot) return null
@@ -32,7 +45,7 @@ export function writeLocalBackup(userId: string): void {
   try {
     const snapshot = collectAppSnapshot()
     if (snapshotIsEmpty(snapshot)) {
-      sessionStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORAGE_KEY)
       return
     }
     const envelope: BackupEnvelope = {
@@ -40,9 +53,9 @@ export function writeLocalBackup(userId: string): void {
       savedAt: new Date().toISOString(),
       snapshot,
     }
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope))
   } catch {
-    // sessionStorage may be unavailable in private mode — cloud save is the fallback.
+    // localStorage may be unavailable in private mode — cloud save is the fallback.
   }
 }
 
@@ -55,7 +68,8 @@ export function readLocalBackup(userId: string): AppSnapshot | null {
 
 export function clearLocalBackup(): void {
   try {
-    sessionStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(LEGACY_SESSION_KEY)
   } catch {
     // ignore
   }

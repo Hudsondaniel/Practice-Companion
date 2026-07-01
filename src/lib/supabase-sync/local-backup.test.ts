@@ -40,7 +40,7 @@ describe('local-backup', () => {
     expect(readLocalBackup('user-2')).toBeNull()
   })
 
-  it('clears backup from sessionStorage', () => {
+  it('clears backup from localStorage', () => {
     writeLocalBackup('user-1')
     clearLocalBackup()
     expect(readLocalBackup('user-1')).toBeNull()

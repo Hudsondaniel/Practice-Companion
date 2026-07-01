@@ -19,6 +19,7 @@ import {
   normalizePracticeSchedule,
   type PracticeWeekSchedule,
 } from '@/types/practice-schedule'
+import { localDateIso } from '@/lib/local-date'
 
 interface PracticeState {
   activeConcept: ActiveConcept | null
@@ -85,7 +86,7 @@ function getDayTypeFromDate(schedule: PracticeWeekSchedule): DayType | null {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().split('T')[0]!
+  return localDateIso()
 }
 
 function createTodaySession(dayType: DayType, activeConceptId: string): DailyPracticeSession {

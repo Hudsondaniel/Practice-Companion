@@ -25,6 +25,7 @@ import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
 import { useIsDayCompleteForToday } from '@/hooks/use-is-day-complete'
+import { localDateIso } from '@/lib/local-date'
 
 export function TodaysPractice() {
   const scheduledDayType = getDayType()
@@ -55,7 +56,7 @@ export function TodaysPractice() {
   const hasRecoverableSession = useGuidedSessionStore((s) => s.hasRecoverableSession)
   const isDayCompleteForToday = useIsDayCompleteForToday()
 
-  const today = new Date().toISOString().split('T')[0]!
+  const today = localDateIso()
   const pausedSession = isPausedForDay && sessionDate === today && phases.length > 0
   const ensureSessionLog = useAdherenceStore((s) => s.ensureSessionLog)
   const monthConfigured = isMonthConfigured(currentMonthYear())
@@ -66,7 +67,7 @@ export function TodaysPractice() {
   }, [today])
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]!
+    const today = localDateIso()
     const savedType =
       todaySession?.date === today ? todaySession.dayType : undefined
     if (dayType) ensureTodaySession(dayType)

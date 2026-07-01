@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { PhaseCompletionLog, SessionAdherenceSummary } from '@/types/practice-adherence'
 import { buildSessionSummary } from '@/types/practice-adherence'
+import { requestPracticePersist } from '@/lib/supabase-sync/persist'
+import { useStreakStore } from '@/stores/streak-store'
 
 interface AdherenceState {
   currentSessionId: string | null
@@ -130,9 +132,25 @@ export const useAdherenceStore = create<AdherenceState>()((set, get) => ({
 
       finishSession: () => {
         const { currentSessionId, currentSessionDate, logs, history } = get()
-        if (!currentSessionId || !currentSessionDate || logs.length === 0) return null
+        if (!currentSessionId || !currentSessionDate) return null
 
-        const summary = buildSessionSummary(currentSessionId, currentSessionDate, logs)
+        const effectiveLogs: PhaseCompletionLog[] =
+          logs.length > 0
+            ? logs
+            : [
+                {
+                  phaseId: 'session-wrap-up',
+                  phaseTitle: 'Practice session',
+                  blockId: 'consolidation',
+                  sessionDate: currentSessionDate,
+                  plannedSeconds: 60,
+                  actualSeconds: 60,
+                  status: 'early',
+                  completedAt: new Date().toISOString(),
+                },
+              ]
+
+        const summary = buildSessionSummary(currentSessionId, currentSessionDate, effectiveLogs)
         set({
           history: [summary, ...history].slice(0, 30),
           currentSessionId: null,
@@ -140,6 +158,8 @@ export const useAdherenceStore = create<AdherenceState>()((set, get) => ({
           logs: [],
           phaseStartedAt: null,
         })
+        useStreakStore.getState().recordPracticeDay(currentSessionDate)
+        requestPracticePersist()
         return summary
       },
 

@@ -2,6 +2,11 @@ import { mapSyncError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 import { readLocalBackup } from '@/lib/supabase-sync/local-backup'
 import {
+  mergeAppSnapshots,
+  reconcileSnapshot,
+  snapshotHasMorePracticeData,
+} from '@/lib/supabase-sync/merge-snapshot'
+import {
   collectAppSnapshot,
   createEmptyAppSnapshot,
   hydrateAppSnapshot,
@@ -56,7 +61,7 @@ export async function saveCloudSnapshot(userId: string, snapshot: AppSnapshot): 
   return updated_at
 }
 
-/** Load practice data from Supabase, recovering from local memory or session backup when cloud is stale. */
+/** Load practice data from Supabase, merging with local memory or backup so practice history is not lost. */
 export async function loadUserDataFromCloud(userId: string): Promise<string> {
   const local = collectAppSnapshot()
   const backup = readLocalBackup(userId)
@@ -65,19 +70,26 @@ export async function loadUserDataFromCloud(userId: string): Promise<string> {
   const bestLocal = !snapshotIsEmpty(local) ? local : backup
 
   if (cloud && !snapshotIsEmpty(cloud.snapshot)) {
-    hydrateAppSnapshot(cloud.snapshot)
+    const merged = bestLocal
+      ? mergeAppSnapshots(cloud.snapshot, bestLocal)
+      : reconcileSnapshot(cloud.snapshot)
+    hydrateAppSnapshot(merged)
+    if (bestLocal && snapshotHasMorePracticeData(merged, cloud.snapshot)) {
+      return saveCloudSnapshot(userId, collectAppSnapshot())
+    }
     return cloud.updated_at
   }
 
   if (bestLocal) {
-    hydrateAppSnapshot(bestLocal)
-    return saveCloudSnapshot(userId, bestLocal)
+    const reconciled = reconcileSnapshot(bestLocal)
+    hydrateAppSnapshot(reconciled)
+    return saveCloudSnapshot(userId, collectAppSnapshot())
   }
 
   if (cloud?.snapshot) {
     const parsed = parseAppSnapshot(cloud.snapshot)
     if (parsed && !snapshotIsEmpty(parsed)) {
-      hydrateAppSnapshot(parsed)
+      hydrateAppSnapshot(reconcileSnapshot(parsed))
       return cloud.updated_at
     }
   }

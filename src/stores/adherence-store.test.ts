@@ -51,4 +51,12 @@ describe('adherence-store', () => {
   it('finishSession returns null when no session was started', () => {
     expect(useAdherenceStore.getState().finishSession()).toBeNull()
   })
+
+  it('finishSession records a minimal summary when session started but no phases logged', () => {
+    useAdherenceStore.getState().startSessionLog('sess-empty', '2026-06-08')
+    const summary = useAdherenceStore.getState().finishSession()
+    expect(summary).not.toBeNull()
+    expect(summary?.date).toBe('2026-06-08')
+    expect(useAdherenceStore.getState().history).toHaveLength(1)
+  })
 })

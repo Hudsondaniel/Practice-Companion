@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { enterGuidedFocusMode, exitGuidedFocusModeIfActive } from '@/lib/guided-fullscreen'
+import { localDateIso } from '@/lib/local-date'
+import { requestPracticePersist } from '@/lib/supabase-sync/persist'
 import type { GuidedPhase } from '@/types/practice-method'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -57,7 +59,7 @@ function phaseDurationSeconds(phase: GuidedPhase | undefined): number {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().split('T')[0]!
+  return localDateIso()
 }
 
 function stepKey(phaseId: string, stepIndex: number): string {
@@ -276,6 +278,7 @@ export const useGuidedSessionStore = create<GuidedSessionState>()((set, get) => 
     })
     markTodaySessionComplete()
     logPracticeDayIfNeeded()
+    requestPracticePersist()
   },
 
   isDayCompleteForToday: () => {

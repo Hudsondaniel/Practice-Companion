@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { localDateIso } from '@/lib/local-date'
 import { useStreakStore } from '@/stores/streak-store'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useTranscriptionStore } from '@/stores/transcription-store'
@@ -41,7 +42,7 @@ function buildMonthGrid(monthYear: string, practiceDays: Set<string>, adherenceB
 
   for (let d = 1; d <= last.getDate(); d++) {
     const date = new Date(y!, m! - 1, d, 12, 0, 0)
-    const iso = date.toISOString().split('T')[0]!
+    const iso = localDateIso(date)
     cells.push({
       date: iso,
       dayNum: d,
@@ -63,7 +64,15 @@ export function PracticeMonthView() {
   const projects = useTranscriptionStore((s) => s.projects)
   const monthYear = currentMonthYear()
 
-  const practiceSet = useMemo(() => new Set(practiceDays), [practiceDays])
+  const practiceSet = useMemo(() => {
+    const set = new Set(practiceDays)
+    for (const session of history) {
+      if (session.date.startsWith(monthYear)) {
+        set.add(session.date)
+      }
+    }
+    return set
+  }, [practiceDays, history, monthYear])
 
   const adherenceByDate = useMemo(() => {
     const map = new Map<string, number>()

@@ -49,6 +49,12 @@ export function Dashboard() {
   }, [ensureTodaySession, setupComplete])
 
   const currentStreak = useMemo(() => getCurrentStreak(), [getCurrentStreak, practiceDays, practiceSchedule])
+  const monthPracticeDays = useMemo(() => {
+    const month = currentMonthYear()
+    const fromStreak = practiceDays.filter((d) => d.startsWith(month))
+    const fromHistory = history.filter((h) => h.date.startsWith(month)).map((h) => h.date)
+    return new Set([...fromStreak, ...fromHistory]).size
+  }, [practiceDays, history])
   const showStartSession = isPracticeDay()
   const practiceWeek = getWeekOfPracticeMonth()
 
@@ -99,6 +105,7 @@ export function Dashboard() {
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <StatCard label="Practice streak" value={`${currentStreak} days`} accent />
+            <StatCard label="Days this month" value={`${monthPracticeDays}`} />
             {showStartSession && totalBlocks > 0 && (
               <StatCard label="Today's blocks" value={`${completedBlocks}/${totalBlocks}`} />
             )}

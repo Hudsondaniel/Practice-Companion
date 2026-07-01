@@ -4,6 +4,8 @@ import {
   type AppSnapshot,
   isAppSnapshot,
 } from '@/types/app-snapshot'
+import { localDateIso } from '@/lib/local-date'
+import { reconcileSnapshot } from '@/lib/supabase-sync/merge-snapshot'
 import { useAdherenceStore } from '@/stores/adherence-store'
 import { useGuidedSessionStore } from '@/stores/guided-session-store'
 import { usePracticeStore } from '@/stores/practice-store'
@@ -13,7 +15,7 @@ import { useTranscriptionStore } from '@/stores/transcription-store'
 import type { GuidedPhase, MonthlyPlan } from '@/types/practice-method'
 
 function todayIso(): string {
-  return new Date().toISOString().split('T')[0]!
+  return localDateIso()
 }
 
 function normalizeMetronomeVolume(volume: number): number {
@@ -152,59 +154,60 @@ function normalizeGuidedAfterCloudLoad(): void {
 
 /** Apply cloud snapshot to in-memory stores. */
 export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
-  const monthlyPlan = normalizeMonthlyPlan(snapshot.practice.monthlyPlan)
+  const normalized = reconcileSnapshot(snapshot)
+  const monthlyPlan = normalizeMonthlyPlan(normalized.practice.monthlyPlan)
 
   usePracticeStore.setState({
-    activeConcept: snapshot.practice.activeConcept,
-    deviceBacklog: snapshot.practice.deviceBacklog,
-    monthlyTunes: snapshot.practice.monthlyTunes,
+    activeConcept: normalized.practice.activeConcept,
+    deviceBacklog: normalized.practice.deviceBacklog,
+    monthlyTunes: normalized.practice.monthlyTunes,
     monthlyPlan,
-    archivedMonthlyPlans: snapshot.practice.archivedMonthlyPlans.map((p) => normalizeMonthlyPlan(p)!),
-    todaySession: snapshot.practice.todaySession,
-    currentBlockId: snapshot.practice.currentBlockId,
-    streak: snapshot.practice.streak,
-    weeklyHours: snapshot.practice.weeklyHours,
-    practiceSchedule: normalizePracticeSchedule(snapshot.practice.practiceSchedule),
+    archivedMonthlyPlans: normalized.practice.archivedMonthlyPlans.map((p) => normalizeMonthlyPlan(p)!),
+    todaySession: normalized.practice.todaySession,
+    currentBlockId: normalized.practice.currentBlockId,
+    streak: normalized.practice.streak,
+    weeklyHours: normalized.practice.weeklyHours,
+    practiceSchedule: normalizePracticeSchedule(normalized.practice.practiceSchedule),
   })
   usePracticeStore.getState().ensureTodaySession(
     (() => {
       const today = todayIso()
-      const saved = snapshot.practice.todaySession
-      const schedule = normalizePracticeSchedule(snapshot.practice.practiceSchedule)
+      const saved = normalized.practice.todaySession
+      const schedule = normalizePracticeSchedule(normalized.practice.practiceSchedule)
       if (saved?.date === today) return saved.dayType
       return getDayTypeForDate(schedule) ?? undefined
     })(),
   )
 
   useTranscriptionStore.setState({
-    projects: snapshot.transcriptions.projects,
-    activeProjectId: snapshot.transcriptions.activeProjectId,
-    selectedSegmentId: snapshot.transcriptions.selectedSegmentId,
+    projects: normalized.transcriptions.projects,
+    activeProjectId: normalized.transcriptions.activeProjectId,
+    selectedSegmentId: normalized.transcriptions.selectedSegmentId,
   })
 
   useAdherenceStore.setState({
-    history: snapshot.adherence.history,
+    history: normalized.adherence.history,
     currentSessionId: null,
     currentSessionDate: null,
     phaseStartedAt: null,
     logs: [],
   })
 
-  useStreakStore.setState(snapshot.streak)
+  useStreakStore.setState(normalized.streak)
 
   useSessionToolsStore.setState({
-    sessionNotes: snapshot.sessionTools.sessionNotes,
-    bpm: snapshot.sessionTools.bpm,
-    metronomeSound: snapshot.sessionTools.metronomeSound,
-    beatsPerMeasure: snapshot.sessionTools.beatsPerMeasure,
-    subdivision: snapshot.sessionTools.subdivision,
-    metronomeVolume: normalizeMetronomeVolume(snapshot.sessionTools.metronomeVolume),
-    countInBars: snapshot.sessionTools.countInBars,
-    lastSessionDurationSeconds: snapshot.sessionTools.lastSessionDurationSeconds,
+    sessionNotes: normalized.sessionTools.sessionNotes,
+    bpm: normalized.sessionTools.bpm,
+    metronomeSound: normalized.sessionTools.metronomeSound,
+    beatsPerMeasure: normalized.sessionTools.beatsPerMeasure,
+    subdivision: normalized.sessionTools.subdivision,
+    metronomeVolume: normalizeMetronomeVolume(normalized.sessionTools.metronomeVolume),
+    countInBars: normalized.sessionTools.countInBars,
+    lastSessionDurationSeconds: normalized.sessionTools.lastSessionDurationSeconds,
   })
 
-  if (snapshot.guidedSession) {
-    const g = snapshot.guidedSession
+  if (normalized.guidedSession) {
+    const g = normalized.guidedSession
     const today = todayIso()
 
     if (g.sessionDate === today && g.dayCompleted) {
@@ -258,8 +261,8 @@ export function hydrateAppSnapshot(snapshot: AppSnapshot): void {
       })
     }
   } else if (
-    snapshot.practice.todaySession?.date === todayIso() &&
-    snapshot.practice.todaySession.completed
+    normalized.practice.todaySession?.date === todayIso() &&
+    normalized.practice.todaySession.completed
   ) {
     useGuidedSessionStore.setState({
       isActive: false,

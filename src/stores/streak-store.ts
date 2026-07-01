@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+import { localDateIso } from '@/lib/local-date'
+import { requestPracticePersist } from '@/lib/supabase-sync/persist'
+import { computeStreakWithSchedule } from '@/types/practice-schedule'
+import { usePracticeStore } from '@/stores/practice-store'
 
 interface StreakState {
   /** ISO dates YYYY-MM-DD when user completed meaningful practice */
@@ -13,11 +17,8 @@ interface StreakState {
 }
 
 function todayIso(date = new Date()): string {
-  return date.toISOString().split('T')[0]!
+  return localDateIso(date)
 }
-
-import { computeStreakWithSchedule } from '@/types/practice-schedule'
-import { usePracticeStore } from '@/stores/practice-store'
 
 function computeLongest(sortedDays: string[]): number {
   if (sortedDays.length === 0) return 0
@@ -52,6 +53,7 @@ export const useStreakStore = create<StreakState>()((set, get) => ({
           practiceDays: next,
           longestStreak: Math.max(get().longestStreak, current, computeLongest(next)),
         })
+        requestPracticePersist()
       },
 
       getCurrentStreak: (today = todayIso()) =>
@@ -73,7 +75,7 @@ export const useStreakStore = create<StreakState>()((set, get) => ({
         for (let i = days - 1; i >= 0; i--) {
           const d = new Date(cursor)
           d.setDate(d.getDate() - i)
-          const iso = d.toISOString().split('T')[0]!
+          const iso = localDateIso(d)
           result.push({ date: iso, practiced: set.has(iso) })
         }
         return result
